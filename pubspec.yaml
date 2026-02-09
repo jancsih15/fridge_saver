@@ -16,6 +16,7 @@ dependencies:
   intl: ^0.20.2
   uuid: ^4.5.1
   mobile_scanner: ^7.1.2
+  http: ^1.2.2
 
 dev_dependencies:
   flutter_test:
@@ -24,4 +25,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
 

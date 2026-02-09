@@ -1,5 +1,6 @@
 ﻿import 'package:flutter/material.dart';
 
+import '../data/open_food_facts_client.dart';
 import '../domain/fridge_item.dart';
 import 'barcode_scanner_screen.dart';
 
@@ -20,7 +21,10 @@ class AddItemInput {
 }
 
 class AddItemScreen extends StatefulWidget {
-  const AddItemScreen({super.key});
+  const AddItemScreen({super.key, OpenFoodFactsClient? openFoodFactsClient})
+      : _openFoodFactsClient = openFoodFactsClient;
+
+  final OpenFoodFactsClient? _openFoodFactsClient;
 
   @override
   State<AddItemScreen> createState() => _AddItemScreenState();
@@ -32,8 +36,16 @@ class _AddItemScreenState extends State<AddItemScreen> {
   final _barcodeController = TextEditingController();
   final _quantityController = TextEditingController(text: '1');
 
+  late final OpenFoodFactsClient _openFoodFactsClient;
+
   DateTime _expirationDate = DateTime.now().add(const Duration(days: 3));
   StorageLocation _location = StorageLocation.fridge;
+
+  @override
+  void initState() {
+    super.initState();
+    _openFoodFactsClient = widget._openFoodFactsClient ?? OpenFoodFactsClient();
+  }
 
   @override
   void dispose() {
@@ -71,6 +83,38 @@ class _AddItemScreenState extends State<AddItemScreen> {
     setState(() {
       _barcodeController.text = result;
     });
+    _showInfo('Barcode scanned: $result');
+
+    if (_nameController.text.trim().isNotEmpty) {
+      _showInfo('Name already filled, skipped product lookup.');
+      return;
+    }
+
+    final lookup = await _openFoodFactsClient.lookupProduct(result);
+    if (!mounted) {
+      return;
+    }
+
+    switch (lookup.status) {
+      case OpenFoodFactsLookupStatus.found:
+        setState(() {
+          _nameController.text = lookup.productName!;
+        });
+        _showInfo('Product found: ${lookup.productName}');
+        break;
+      case OpenFoodFactsLookupStatus.notFound:
+        _showInfo('No product found for this barcode.');
+        break;
+      case OpenFoodFactsLookupStatus.failed:
+        _showInfo('Lookup failed. You can enter the product name manually.');
+        break;
+    }
+  }
+
+  void _showInfo(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _submit() {
