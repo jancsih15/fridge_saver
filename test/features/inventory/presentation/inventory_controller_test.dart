@@ -38,6 +38,8 @@ void main() {
 
       expect(controller.allItems.length, 1);
       expect(controller.allItems.first.name, 'Milk');
+      expect(controller.expiringSoonOnly, isFalse);
+      expect(controller.visibleItems.length, 1);
     });
 
     test('adds item and persists it', () async {
