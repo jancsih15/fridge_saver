@@ -8,6 +8,12 @@ import 'package:fridge_saver/features/inventory/data/open_food_facts_client.dart
 
 void main() {
   group('OpenFoodFactsClient', () {
+    test('default constructor handles empty barcode without network call', () async {
+      final api = OpenFoodFactsClient();
+      final result = await api.lookupProduct(' ');
+      expect(result.status, OpenFoodFactsLookupStatus.notFound);
+    });
+
     test('returns found with product_name when API has a match', () async {
       final client = MockClient((request) async {
         expect(request.url.path, '/api/v2/product/5449000000996');
@@ -66,6 +72,18 @@ void main() {
       expect(result.productName, isNull);
     });
 
+    test('returns failed when JSON payload is not an object', () async {
+      final client = MockClient((request) async {
+        return http.Response('[]', 200);
+      });
+
+      final api = OpenFoodFactsClient(httpClient: client);
+      final result = await api.lookupProduct('1234');
+
+      expect(result.status, OpenFoodFactsLookupStatus.failed);
+      expect(result.productName, isNull);
+    });
+
     test('returns notFound on 404 response', () async {
       final client = MockClient((request) async {
         return http.Response('not found', 404);
@@ -99,6 +117,42 @@ void main() {
       final result = await api.lookupProduct('1234');
 
       expect(result.status, OpenFoodFactsLookupStatus.failed);
+      expect(result.productName, isNull);
+    });
+
+    test('returns notFound when product field is not an object', () async {
+      final client = MockClient((request) async {
+        return http.Response(
+          jsonEncode({
+            'status': 1,
+            'product': [],
+          }),
+          200,
+        );
+      });
+
+      final api = OpenFoodFactsClient(httpClient: client);
+      final result = await api.lookupProduct('1234');
+
+      expect(result.status, OpenFoodFactsLookupStatus.notFound);
+      expect(result.productName, isNull);
+    });
+
+    test('returns notFound when product name is empty', () async {
+      final client = MockClient((request) async {
+        return http.Response(
+          jsonEncode({
+            'status': 1,
+            'product': {'product_name': '   '},
+          }),
+          200,
+        );
+      });
+
+      final api = OpenFoodFactsClient(httpClient: client);
+      final result = await api.lookupProduct('1234');
+
+      expect(result.status, OpenFoodFactsLookupStatus.notFound);
       expect(result.productName, isNull);
     });
 

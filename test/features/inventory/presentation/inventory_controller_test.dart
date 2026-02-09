@@ -112,10 +112,77 @@ void main() {
       final controller = InventoryController(repository: repo);
       await controller.load();
 
-      await controller.deleteItem('1');
+      final deleted = await controller.deleteItem('1');
 
       expect(controller.allItems, isEmpty);
+      expect(deleted, isNotNull);
+      expect(deleted!.item.id, '1');
+      expect(deleted.index, 0);
       expect(repo.saveCalls, 1);
+    });
+
+    test('restores deleted item and persists', () async {
+      final repo = _FakeInventoryRepository(initialItems: [
+        FridgeItem(
+          id: '1',
+          name: 'Milk',
+          barcode: null,
+          quantity: 1,
+          expirationDate: DateTime(2026, 2, 15),
+          location: StorageLocation.fridge,
+        ),
+        FridgeItem(
+          id: '2',
+          name: 'Eggs',
+          barcode: null,
+          quantity: 6,
+          expirationDate: DateTime(2026, 2, 16),
+          location: StorageLocation.fridge,
+        ),
+      ]);
+
+      final controller = InventoryController(repository: repo);
+      await controller.load();
+
+      final deleted = await controller.deleteItem('1');
+      expect(controller.allItems.map((e) => e.id), ['2']);
+
+      await controller.restoreDeletedItem(deleted!);
+
+      expect(controller.allItems.map((e) => e.id), ['1', '2']);
+      expect(repo.saveCalls, 2);
+    });
+
+    test('restore clamps out-of-range index to end of list', () async {
+      final repo = _FakeInventoryRepository(initialItems: [
+        FridgeItem(
+          id: '2',
+          name: 'Eggs',
+          barcode: null,
+          quantity: 6,
+          expirationDate: DateTime(2026, 2, 16),
+          location: StorageLocation.fridge,
+        ),
+      ]);
+
+      final controller = InventoryController(repository: repo);
+      await controller.load();
+
+      await controller.restoreDeletedItem(
+        DeletedInventoryItem(
+          item: FridgeItem(
+            id: '1',
+            name: 'Milk',
+            barcode: null,
+            quantity: 1,
+            expirationDate: DateTime(2026, 2, 15),
+            location: StorageLocation.fridge,
+          ),
+          index: 999,
+        ),
+      );
+
+      expect(controller.allItems.map((e) => e.id), ['2', '1']);
     });
 
     test('filters expiring soon items within 3 days', () async {

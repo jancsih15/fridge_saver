@@ -39,12 +39,29 @@ class InventoryScreen extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           child: const Icon(Icons.delete, color: Colors.white),
                         ),
-                        onDismissed: (_) {
-                          context.read<InventoryController>().deleteItem(item.id);
+                        onDismissed: (_) async {
+                          final deleted = await context
+                              .read<InventoryController>()
+                              .deleteItem(item.id);
+                          if (deleted == null || !context.mounted) {
+                            return;
+                          }
+
                           ScaffoldMessenger.of(context)
                             ..hideCurrentSnackBar()
                             ..showSnackBar(
-                              SnackBar(content: Text('${item.name} deleted')),
+                              SnackBar(
+                                content: Text('${item.name} deleted'),
+                                duration: const Duration(seconds: 4),
+                                action: SnackBarAction(
+                                  label: 'UNDO',
+                                  onPressed: () {
+                                    context
+                                        .read<InventoryController>()
+                                        .restoreDeletedItem(deleted);
+                                  },
+                                ),
+                              ),
                             );
                         },
                         child: ListTile(

@@ -6,6 +6,16 @@ import '../domain/fridge_item.dart';
 
 typedef NowProvider = DateTime Function();
 
+class DeletedInventoryItem {
+  DeletedInventoryItem({
+    required this.item,
+    required this.index,
+  });
+
+  final FridgeItem item;
+  final int index;
+}
+
 class InventoryController extends ChangeNotifier {
   InventoryController({
     required InventoryRepository repository,
@@ -107,13 +117,32 @@ class InventoryController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> deleteItem(String id) async {
-    final before = _items.length;
-    _items.removeWhere((item) => item.id == id);
-    if (_items.length == before) {
+  Future<DeletedInventoryItem?> deleteItem(String id) async {
+    final index = _items.indexWhere((item) => item.id == id);
+    if (index == -1) {
+      return null;
+    }
+
+    final removed = _items.removeAt(index);
+
+    await _repository.saveItems(_items);
+    notifyListeners();
+    return DeletedInventoryItem(item: removed, index: index);
+  }
+
+  Future<void> restoreDeletedItem(DeletedInventoryItem deleted) async {
+    if (_items.any((item) => item.id == deleted.item.id)) {
       return;
     }
 
+    var targetIndex = deleted.index;
+    if (targetIndex < 0) {
+      targetIndex = 0;
+    } else if (targetIndex > _items.length) {
+      targetIndex = _items.length;
+    }
+
+    _items.insert(targetIndex, deleted.item);
     await _repository.saveItems(_items);
     notifyListeners();
   }
