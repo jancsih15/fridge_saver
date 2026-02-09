@@ -30,10 +30,34 @@ class InventoryScreen extends StatelessWidget {
                     separatorBuilder: (_, __) => const Divider(height: 1),
                     itemBuilder: (context, index) {
                       final item = controller.visibleItems[index];
-                      return ListTile(
-                        title: Text(item.name),
-                        subtitle: Text(
-                          '${item.location.name} • Qty ${item.quantity} • Expires ${DateFormat.yMMMd().format(item.expirationDate)}',
+                      return Dismissible(
+                        key: ValueKey(item.id),
+                        direction: DismissDirection.endToStart,
+                        background: Container(
+                          color: Colors.red,
+                          alignment: Alignment.centerRight,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: const Icon(Icons.delete, color: Colors.white),
+                        ),
+                        onDismissed: (_) {
+                          context.read<InventoryController>().deleteItem(item.id);
+                          ScaffoldMessenger.of(context)
+                            ..hideCurrentSnackBar()
+                            ..showSnackBar(
+                              SnackBar(content: Text('${item.name} deleted')),
+                            );
+                        },
+                        child: ListTile(
+                          onTap: () => _openEditItem(context, item),
+                          title: Text(item.name),
+                          subtitle: Text(
+                            '${item.location.name} • Qty ${item.quantity} • Expires ${DateFormat.yMMMd().format(item.expirationDate)}',
+                          ),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.edit),
+                            tooltip: 'Edit item',
+                            onPressed: () => _openEditItem(context, item),
+                          ),
                         ),
                       );
                     },
@@ -59,6 +83,25 @@ class InventoryScreen extends StatelessWidget {
     }
 
     await context.read<InventoryController>().addItem(
+          name: input.name,
+          barcode: input.barcode,
+          quantity: input.quantity,
+          expirationDate: input.expirationDate,
+          location: input.location,
+        );
+  }
+
+  Future<void> _openEditItem(BuildContext context, FridgeItem item) async {
+    final input = await Navigator.of(context).push<AddItemInput>(
+      MaterialPageRoute(builder: (_) => AddItemScreen(initialItem: item)),
+    );
+
+    if (input == null || !context.mounted) {
+      return;
+    }
+
+    await context.read<InventoryController>().updateItem(
+          id: item.id,
           name: input.name,
           barcode: input.barcode,
           quantity: input.quantity,

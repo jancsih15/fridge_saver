@@ -72,6 +72,52 @@ class InventoryController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> updateItem({
+    required String id,
+    required String name,
+    required int quantity,
+    required DateTime expirationDate,
+    required StorageLocation location,
+    String? barcode,
+  }) async {
+    final index = _items.indexWhere((item) => item.id == id);
+    if (index == -1) {
+      return;
+    }
+
+    final trimmedName = name.trim();
+    if (trimmedName.isEmpty) {
+      return;
+    }
+
+    _items[index] = FridgeItem(
+      id: id,
+      name: trimmedName,
+      barcode: barcode?.trim().isEmpty ?? true ? null : barcode?.trim(),
+      quantity: quantity,
+      expirationDate: DateTime(
+        expirationDate.year,
+        expirationDate.month,
+        expirationDate.day,
+      ),
+      location: location,
+    );
+
+    await _repository.saveItems(_items);
+    notifyListeners();
+  }
+
+  Future<void> deleteItem(String id) async {
+    final before = _items.length;
+    _items.removeWhere((item) => item.id == id);
+    if (_items.length == before) {
+      return;
+    }
+
+    await _repository.saveItems(_items);
+    notifyListeners();
+  }
+
   void setExpiringSoonOnly(bool value) {
     _expiringSoonOnly = value;
     notifyListeners();

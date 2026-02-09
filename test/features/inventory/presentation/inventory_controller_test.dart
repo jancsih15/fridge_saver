@@ -50,13 +50,69 @@ void main() {
       await controller.load();
       await controller.addItem(
         name: 'Eggs',
+        barcode: '  599001  ',
         quantity: 6,
-        expirationDate: DateTime(2026, 2, 12),
+        expirationDate: DateTime(2026, 2, 12, 22, 15),
         location: StorageLocation.fridge,
       );
 
       expect(controller.allItems.length, 1);
       expect(controller.allItems.first.name, 'Eggs');
+      expect(controller.allItems.first.barcode, '599001');
+      expect(controller.allItems.first.expirationDate, DateTime(2026, 2, 12));
+      expect(repo.saveCalls, 1);
+    });
+
+    test('updates item and persists changes', () async {
+      final repo = _FakeInventoryRepository(initialItems: [
+        FridgeItem(
+          id: '1',
+          name: 'Milk',
+          barcode: null,
+          quantity: 1,
+          expirationDate: DateTime(2026, 2, 15),
+          location: StorageLocation.fridge,
+        ),
+      ]);
+
+      final controller = InventoryController(repository: repo);
+      await controller.load();
+
+      await controller.updateItem(
+        id: '1',
+        name: 'Oat Milk',
+        barcode: '599999',
+        quantity: 2,
+        expirationDate: DateTime(2026, 2, 18),
+        location: StorageLocation.pantry,
+      );
+
+      expect(controller.allItems.single.name, 'Oat Milk');
+      expect(controller.allItems.single.barcode, '599999');
+      expect(controller.allItems.single.quantity, 2);
+      expect(controller.allItems.single.expirationDate, DateTime(2026, 2, 18));
+      expect(controller.allItems.single.location, StorageLocation.pantry);
+      expect(repo.saveCalls, 1);
+    });
+
+    test('deletes item by id and persists', () async {
+      final repo = _FakeInventoryRepository(initialItems: [
+        FridgeItem(
+          id: '1',
+          name: 'Milk',
+          barcode: null,
+          quantity: 1,
+          expirationDate: DateTime(2026, 2, 15),
+          location: StorageLocation.fridge,
+        ),
+      ]);
+
+      final controller = InventoryController(repository: repo);
+      await controller.load();
+
+      await controller.deleteItem('1');
+
+      expect(controller.allItems, isEmpty);
       expect(repo.saveCalls, 1);
     });
 

@@ -21,10 +21,16 @@ class AddItemInput {
 }
 
 class AddItemScreen extends StatefulWidget {
-  const AddItemScreen({super.key, OpenFoodFactsClient? openFoodFactsClient})
-      : _openFoodFactsClient = openFoodFactsClient;
+  const AddItemScreen({
+    super.key,
+    OpenFoodFactsClient? openFoodFactsClient,
+    this.initialItem,
+  }) : _openFoodFactsClient = openFoodFactsClient;
 
   final OpenFoodFactsClient? _openFoodFactsClient;
+  final FridgeItem? initialItem;
+
+  bool get isEditMode => initialItem != null;
 
   @override
   State<AddItemScreen> createState() => _AddItemScreenState();
@@ -45,6 +51,15 @@ class _AddItemScreenState extends State<AddItemScreen> {
   void initState() {
     super.initState();
     _openFoodFactsClient = widget._openFoodFactsClient ?? OpenFoodFactsClient();
+
+    final initial = widget.initialItem;
+    if (initial != null) {
+      _nameController.text = initial.name;
+      _barcodeController.text = initial.barcode ?? '';
+      _quantityController.text = initial.quantity.toString();
+      _expirationDate = initial.expirationDate;
+      _location = initial.location;
+    }
   }
 
   @override
@@ -139,7 +154,9 @@ class _AddItemScreenState extends State<AddItemScreen> {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Add Item')),
+      appBar: AppBar(
+        title: Text(widget.isEditMode ? 'Edit Item' : 'Add Item'),
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomInset),
@@ -220,7 +237,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
                   width: double.infinity,
                   child: FilledButton(
                     onPressed: _submit,
-                    child: const Text('Save Item'),
+                    child: Text(widget.isEditMode ? 'Save Changes' : 'Save Item'),
                   ),
                 ),
               ],
