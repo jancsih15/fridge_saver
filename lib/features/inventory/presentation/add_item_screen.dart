@@ -77,84 +77,88 @@ class _AddItemScreenState extends State<AddItemScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
     return Scaffold(
       appBar: AppBar(title: const Text('Add Item')),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(labelText: 'Name'),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Name is required';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _barcodeController,
-                decoration: const InputDecoration(labelText: 'Barcode (optional)'),
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _quantityController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Quantity'),
-                validator: (value) {
-                  final parsed = int.tryParse(value ?? '');
-                  if (parsed == null || parsed <= 0) {
-                    return 'Enter a number greater than 0';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<StorageLocation>(
-                value: _location,
-                decoration: const InputDecoration(labelText: 'Location'),
-                items: StorageLocation.values
-                    .map(
-                      (location) => DropdownMenuItem(
-                        value: location,
-                        child: Text(location.name),
-                      ),
-                    )
-                    .toList(growable: false),
-                onChanged: (value) {
-                  if (value != null) {
-                    setState(() {
-                      _location = value;
-                    });
-                  }
-                },
-              ),
-              const SizedBox(height: 12),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Expiration date'),
-                subtitle: Text(
-                  '${_expirationDate.year}-${_expirationDate.month.toString().padLeft(2, '0')}-${_expirationDate.day.toString().padLeft(2, '0')}',
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomInset),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextFormField(
+                  controller: _nameController,
+                  decoration: const InputDecoration(labelText: 'Name'),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Name is required';
+                    }
+                    return null;
+                  },
                 ),
-                trailing: OutlinedButton(
-                  onPressed: _pickDate,
-                  child: const Text('Pick date'),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _barcodeController,
+                  decoration: const InputDecoration(labelText: 'Barcode (optional)'),
                 ),
-              ),
-              const Spacer(),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: _submit,
-                  child: const Text('Save Item'),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _quantityController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Quantity'),
+                  validator: (value) {
+                    final parsed = int.tryParse(value ?? '');
+                    if (parsed == null || parsed <= 0) {
+                      return 'Enter a number greater than 0';
+                    }
+                    return null;
+                  },
                 ),
-              ),
-            ],
+                const SizedBox(height: 12),
+                DropdownButtonFormField<StorageLocation>(
+                  value: _location,
+                  decoration: const InputDecoration(labelText: 'Location'),
+                  items: StorageLocation.values
+                      .map(
+                        (location) => DropdownMenuItem(
+                          value: location,
+                          child: Text(location.name),
+                        ),
+                      )
+                      .toList(growable: false),
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() {
+                        _location = value;
+                      });
+                    }
+                  },
+                ),
+                const SizedBox(height: 12),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Expiration date'),
+                  subtitle: Text(
+                    '${_expirationDate.year}-${_expirationDate.month.toString().padLeft(2, '0')}-${_expirationDate.day.toString().padLeft(2, '0')}',
+                  ),
+                  trailing: OutlinedButton(
+                    onPressed: _pickDate,
+                    child: const Text('Pick date'),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: _submit,
+                    child: const Text('Save Item'),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
