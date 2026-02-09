@@ -1,6 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 
 import '../domain/fridge_item.dart';
+import 'barcode_scanner_screen.dart';
 
 class AddItemInput {
   AddItemInput({
@@ -58,6 +59,20 @@ class _AddItemScreenState extends State<AddItemScreen> {
     }
   }
 
+  Future<void> _scanBarcode() async {
+    final result = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => const BarcodeScannerScreen()),
+    );
+
+    if (result == null || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _barcodeController.text = result;
+    });
+  }
+
   void _submit() {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -102,7 +117,14 @@ class _AddItemScreenState extends State<AddItemScreen> {
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _barcodeController,
-                  decoration: const InputDecoration(labelText: 'Barcode (optional)'),
+                  decoration: InputDecoration(
+                    labelText: 'Barcode (optional)',
+                    suffixIcon: IconButton(
+                      tooltip: 'Scan barcode',
+                      onPressed: _scanBarcode,
+                      icon: const Icon(Icons.qr_code_scanner),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
