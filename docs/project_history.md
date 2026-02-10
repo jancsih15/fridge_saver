@@ -28,6 +28,7 @@ Last updated: 2026-02-10
 8. Duplicate batch merge behavior implemented for realistic inventory handling.
 9. Multi-provider free barcode lookup fallback + cache + settings UI implemented.
 10. Local notifications kickoff + settings hub refactor implemented.
+11. Daily summary notification flow completed with tap deep-link and snooze actions.
 
 ## Recent Error/Fix Register
 - `MissingPluginException` after plugin changes
@@ -52,6 +53,14 @@ Last updated: 2026-02-10
 - Debug notification scheduled for ~1 minute did not reliably appear
   - Cause: inexact scheduling/idle behavior variability on device.
   - Fix: debug action changed to immediate local notification send.
+
+- Notification tap stayed on Debug Tools and did not navigate to expiring items
+  - Cause: notification response callback not wired to app navigation/filter state.
+  - Fix: added app navigator callback from scheduler to pop to inventory and apply Today filter.
+
+- Notification snooze actions gave no clear confirmation
+  - Cause: no confirmation signal after action scheduling.
+  - Fix: added explicit snooze confirmation notification with relative day text (today/tomorrow/date).
 
 ## Coverage Snapshots
 - Earlier baseline after hardening: 100% (131/131)

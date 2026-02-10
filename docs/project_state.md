@@ -27,6 +27,7 @@ Android-first MVP that reduces food waste by tracking items and expiration dates
   - `lib/features/inventory/data/barcode_lookup_settings_repository.dart`
   - `lib/features/inventory/data/barcode_lookup_cache_repository.dart`
   - `lib/features/inventory/data/expiration_notification_scheduler.dart`
+  - `lib/features/inventory/data/expiring_filter_settings_repository.dart`
 - Presentation:
   - `lib/features/inventory/presentation/inventory_controller.dart`
   - `lib/features/inventory/presentation/inventory_screen.dart`
@@ -38,10 +39,12 @@ Android-first MVP that reduces food waste by tracking items and expiration dates
   - `lib/features/inventory/presentation/barcode_lookup_settings_screen.dart`
   - `lib/features/inventory/presentation/app_settings_screen.dart`
   - `lib/features/inventory/presentation/debug_tools_screen.dart`
+  - `lib/features/inventory/presentation/notification_settings_screen.dart`
 
 ## Implemented Features
 - Inventory CRUD (add/edit/delete) with undo delete.
 - Expiring-soon filter (within 3 days).
+- Configurable expiring window filter chips (All/Today/1/3/7 days) with local persistence.
 - Duplicate merge logic:
   - Exact duplicate batch (same name+barcode+date+location) merges quantity.
   - Different expiry dates remain separate rows.
@@ -53,15 +56,20 @@ Android-first MVP that reduces food waste by tracking items and expiration dates
   - scheduled 2 days before expiration at 09:00 local time,
   - synced on inventory mutations,
   - debug test notification action in Debug Tools.
+- Daily summary notification:
+  - morning summary for items expiring today,
+  - tap opens inventory and applies Today filter,
+  - notification action snooze (12:00 / 17:00) with confirmation,
+  - manual snooze actions in `Settings -> Notifications`.
 - Expiry date entry:
   - manual date picker,
   - OCR suggestions,
   - optional user-triggered AI fallback (text then image).
 
 ## Quality Snapshot
-- Latest test run: full suite passed.
-- Latest coverage: 88.29% (445/504).
-- Largest remaining misses are in new notification and settings-related branches.
+- Latest test run: full suite passed (81 tests).
+- Latest coverage: 88.29% (445/504) from previous measured run (`--coverage` not re-run in this step).
+- Largest remaining misses are in notification/settings UI branches.
 
 ## Known Environment Notes
 - Flutter SDK path: `C:\dev\flutter`
@@ -81,6 +89,7 @@ Android-first MVP that reduces food waste by tracking items and expiration dates
   - `flutter test --coverage`
 - Notification debug test:
   - `Settings -> Debug Tools -> Send test notification now`
+  - `Settings -> Debug Tools -> Send daily summary QA notification`
 
 ## Next Recommended Work
 1. Add user-configurable reminder preferences (lead time and reminder hour).
