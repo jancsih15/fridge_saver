@@ -43,6 +43,14 @@ class _FakeNotificationScheduler implements ExpirationNotificationScheduler {
   Future<void> sendDailySummaryTestNotification(List<FridgeItem> items) async {}
 
   @override
+  Future<List<ScheduledNotificationInfo>> getScheduledNotifications() async {
+    return const [];
+  }
+
+  @override
+  Future<void> clearScheduledNotifications() async {}
+
+  @override
   Future<DateTime?> snoozeDailySummary({
     required List<FridgeItem> items,
     required int targetHour,

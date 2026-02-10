@@ -161,4 +161,19 @@ void main() {
       expect(result, DateTime(2026, 2, 11, 17, 0));
     });
   });
+
+  group('scheduledForFromPayload', () {
+    test('parses scheduled_for timestamp from payload json', () {
+      final scheduled = scheduledForFromPayload(
+        '{"type":"summary","title":"x","body":"y","scheduled_for":"2026-02-10T12:00:00.000"}',
+      );
+      expect(scheduled, DateTime(2026, 2, 10, 12));
+    });
+
+    test('returns null for missing or invalid payload data', () {
+      expect(scheduledForFromPayload(null), isNull);
+      expect(scheduledForFromPayload('{"type":"summary"}'), isNull);
+      expect(scheduledForFromPayload('not-json'), isNull);
+    });
+  });
 }

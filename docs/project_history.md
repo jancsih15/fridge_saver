@@ -62,6 +62,14 @@ Last updated: 2026-02-10
   - Cause: no confirmation signal after action scheduling.
   - Fix: added explicit snooze confirmation notification with relative day text (today/tomorrow/date).
 
+- Debug pending list showed `unknown`/`time unknown` entries
+  - Cause: legacy pending notifications had no payload metadata.
+  - Fix: added fallback type/title/time inference for legacy reminder entries.
+
+- Snoozed summary could be overwritten after app reopen/sync
+  - Cause: scheduler sync replaced summary reminders on load.
+  - Fix: preserve one pending summary during sync and only rebuild item reminders.
+
 ## Coverage Snapshots
 - Earlier baseline after hardening: 100% (131/131)
 - OCR/AI expansion phase: ~97-98%

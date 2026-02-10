@@ -24,6 +24,8 @@ Daily, useful expiry reminders with snooze and deep-linking into the expiring vi
 1. Debug action: schedule daily summary for +1 minute.
    - Status: `pending`
 2. Debug panel: show currently scheduled notification IDs and trigger times.
-   - Status: `pending`
+   - Status: `done`
 3. Debug action: cancel only summary notifications (without clearing item reminders).
    - Status: `pending`
+4. Debug action: clear all scheduled notifications (full reset for QA).
+   - Status: `done`

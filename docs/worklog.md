@@ -175,3 +175,24 @@ Use this log for day-to-day progress so history stays easy to query later.
   - Full suite passed (81 tests).
 - Coverage:
   - Not re-measured with `--coverage` in this sub-step; previous measured snapshot remains 88.29% (445/504).
+
+- Date: 2026-02-10
+- Task: Add notification QA debug panel details and stabilization fixes.
+- Result:
+  - Added scheduled-notification debug list (id/type/title/time) with refresh.
+  - Added debug action to clear scheduled notifications for clean QA repro.
+  - Added fallback classification/time inference for legacy pending reminders without payload metadata.
+  - Fixed summary-snooze overwrite issue by preserving one existing pending summary during reminder sync.
+- Errors:
+  - Some scheduled entries showed `unknown` type and `time unknown`.
+  - Snoozed summary for tomorrow could be replaced during app sync/reopen.
+- Hardships/Operational Issues:
+  - Legacy pending notifications from earlier builds lacked payload metadata.
+- Fixes:
+  - Added payload fallback inference and managed-reminder cancellation logic.
+  - Kept exactly one pending summary during sync to avoid clobbering snoozed summary.
+- Tests:
+  - Targeted scheduler tests passed.
+  - Full suite passed (83 tests).
+- Coverage:
+  - Not re-measured with `--coverage` in this sub-step.

@@ -13,10 +13,28 @@ abstract class ExpirationNotificationScheduler {
   Future<void> syncItemReminders(List<FridgeItem> items);
   Future<void> sendTestNotification();
   Future<void> sendDailySummaryTestNotification(List<FridgeItem> items);
+  Future<List<ScheduledNotificationInfo>> getScheduledNotifications();
+  Future<void> clearScheduledNotifications();
   Future<DateTime?> snoozeDailySummary({
     required List<FridgeItem> items,
     required int targetHour,
   });
+}
+
+class ScheduledNotificationInfo {
+  const ScheduledNotificationInfo({
+    required this.id,
+    required this.title,
+    required this.body,
+    required this.type,
+    this.scheduledFor,
+  });
+
+  final int id;
+  final String? title;
+  final String? body;
+  final String type;
+  final DateTime? scheduledFor;
 }
 
 class LocalExpirationNotificationScheduler
@@ -40,6 +58,10 @@ class LocalExpirationNotificationScheduler
   static const _summaryActionOpen = 'open_expiring';
   static const _summaryActionSnoozeNoon = 'snooze_noon';
   static const _summaryActionSnoozeEvening = 'snooze_evening';
+  static const _typeItemReminder = 'item_reminder';
+  static const _typeSummary = 'summary';
+  static const _typeTest = 'test';
+  static const _typeSnoozeConfirmation = 'snooze_confirmation';
 
   final FlutterLocalNotificationsPlugin _plugin;
   final DateTime Function() _now;
@@ -81,7 +103,7 @@ class LocalExpirationNotificationScheduler
   @override
   Future<void> syncItemReminders(List<FridgeItem> items) async {
     await initialize();
-    await _plugin.cancelAll();
+    final hasPendingSummary = await _cancelManagedReminders();
 
     final now = _now();
     for (final item in items) {
@@ -111,13 +133,19 @@ class LocalExpirationNotificationScheduler
             priority: Priority.high,
           ),
         ),
+        payload: _notificationPayload(
+          type: _typeItemReminder,
+          title: 'Food expiring soon',
+          body: '${item.name} expires on $dateLabel',
+          scheduledFor: remindAt,
+        ),
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       );
     }
 
     final summaryTime = computeNextDailySummaryTime(now: now);
     final summaryItems = itemsExpiringOnDate(items, summaryTime);
-    if (summaryItems.isEmpty) {
+    if (summaryItems.isEmpty || hasPendingSummary) {
       return;
     }
 
@@ -155,9 +183,32 @@ class LocalExpirationNotificationScheduler
       payload: _summaryPayload(
         title: dailySummaryTitle(summaryItems.length),
         body: dailySummaryBody(summaryItems),
+        scheduledFor: summaryTime,
       ),
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
     );
+  }
+
+  Future<bool> _cancelManagedReminders() async {
+    final pending = await _plugin.pendingNotificationRequests();
+    var hasPendingSummary = false;
+    for (final request in pending) {
+      final payloadMap = notificationPayloadMap(request.payload);
+      final type = _resolveNotificationType(request, payloadMap);
+      if (type == _typeItemReminder) {
+        await _plugin.cancel(request.id);
+        continue;
+      }
+      if (type == _typeSummary) {
+        if (!hasPendingSummary) {
+          hasPendingSummary = true;
+        } else {
+          // Keep only one pending summary entry.
+          await _plugin.cancel(request.id);
+        }
+      }
+    }
+    return hasPendingSummary;
   }
 
   @override
@@ -177,6 +228,11 @@ class LocalExpirationNotificationScheduler
           importance: Importance.high,
           priority: Priority.high,
         ),
+      ),
+      payload: _notificationPayload(
+        type: _typeTest,
+        title: 'Fridge Saver test notification',
+        body: 'If you see this, local notifications are working.',
       ),
     );
   }
@@ -219,8 +275,151 @@ class LocalExpirationNotificationScheduler
       payload: _summaryPayload(
         title: dailySummaryTitle(items.length),
         body: dailySummaryBody(items),
+        scheduledFor: _now(),
       ),
     );
+  }
+
+  @override
+  Future<List<ScheduledNotificationInfo>> getScheduledNotifications() async {
+    await initialize();
+    final pending = await _plugin.pendingNotificationRequests();
+    final results = pending
+        .map((request) {
+          final payloadMap = notificationPayloadMap(request.payload);
+          final type = _resolveNotificationType(request, payloadMap);
+          final title = _resolveNotificationTitle(request, payloadMap, type);
+          final body = _resolveNotificationBody(request, payloadMap);
+          final scheduledFor = _resolveScheduledFor(
+            request: request,
+            payloadMap: payloadMap,
+            type: type,
+            body: body,
+          );
+          return ScheduledNotificationInfo(
+            id: request.id,
+            title: title,
+            body: body,
+            type: type,
+            scheduledFor: scheduledFor,
+          );
+        })
+        .toList(growable: false);
+
+    results.sort((a, b) {
+      final aTime = a.scheduledFor;
+      final bTime = b.scheduledFor;
+      if (aTime == null && bTime == null) {
+        return a.id.compareTo(b.id);
+      }
+      if (aTime == null) {
+        return 1;
+      }
+      if (bTime == null) {
+        return -1;
+      }
+      return aTime.compareTo(bTime);
+    });
+    return results;
+  }
+
+  @override
+  Future<void> clearScheduledNotifications() async {
+    await initialize();
+    await _plugin.cancelAll();
+  }
+
+  String _resolveNotificationType(
+    PendingNotificationRequest request,
+    Map<String, dynamic> payloadMap,
+  ) {
+    final payloadType = payloadMap['type'] as String?;
+    if (payloadType != null && payloadType.isNotEmpty) {
+      return payloadType;
+    }
+    if (request.id == _dailySummaryNotificationId) {
+      return _typeSummary;
+    }
+    if (request.id == _testNotificationId) {
+      return _typeTest;
+    }
+    if (request.id == _snoozeConfirmationNotificationId) {
+      return _typeSnoozeConfirmation;
+    }
+    return _typeItemReminder;
+  }
+
+  String _resolveNotificationTitle(
+    PendingNotificationRequest request,
+    Map<String, dynamic> payloadMap,
+    String type,
+  ) {
+    final payloadTitle = payloadMap['title'] as String?;
+    if (request.title != null && request.title!.isNotEmpty) {
+      return request.title!;
+    }
+    if (payloadTitle != null && payloadTitle.isNotEmpty) {
+      return payloadTitle;
+    }
+    switch (type) {
+      case _typeSummary:
+        return 'Items expiring today';
+      case _typeTest:
+        return 'Fridge Saver test notification';
+      case _typeSnoozeConfirmation:
+        return 'Summary snoozed';
+      default:
+        return 'Food expiring soon';
+    }
+  }
+
+  String _resolveNotificationBody(
+    PendingNotificationRequest request,
+    Map<String, dynamic> payloadMap,
+  ) {
+    final payloadBody = payloadMap['body'] as String?;
+    if (request.body != null && request.body!.isNotEmpty) {
+      return request.body!;
+    }
+    if (payloadBody != null && payloadBody.isNotEmpty) {
+      return payloadBody;
+    }
+    return '';
+  }
+
+  DateTime? _resolveScheduledFor({
+    required PendingNotificationRequest request,
+    required Map<String, dynamic> payloadMap,
+    required String type,
+    required String body,
+  }) {
+    final payloadDate = scheduledForFromPayload(request.payload);
+    if (payloadDate != null) {
+      return payloadDate;
+    }
+    if (type != _typeItemReminder) {
+      return null;
+    }
+    final match = RegExp(
+      r'expires on (\d{4})-(\d{2})-(\d{2})',
+      caseSensitive: false,
+    ).firstMatch(body);
+    if (match == null) {
+      return null;
+    }
+    final year = int.tryParse(match.group(1)!);
+    final month = int.tryParse(match.group(2)!);
+    final day = int.tryParse(match.group(3)!);
+    if (year == null || month == null || day == null) {
+      return null;
+    }
+    final expirationDate = DateTime(year, month, day);
+    return DateTime(
+      expirationDate.year,
+      expirationDate.month,
+      expirationDate.day,
+      _reminderHour,
+    ).subtract(Duration(days: _reminderDaysBefore));
   }
 
   @override
@@ -234,7 +433,11 @@ class LocalExpirationNotificationScheduler
     final summaryItems = itemsExpiringOnDate(items, _now());
     final title = dailySummaryTitle(summaryItems.length);
     final body = dailySummaryBody(summaryItems);
-    final payload = _summaryPayload(title: title, body: body);
+    final payload = _summaryPayload(
+      title: title,
+      body: body,
+      scheduledFor: null,
+    );
     final when = await _scheduleSnooze(
       payload,
       targetHour: targetHour,
@@ -300,7 +503,11 @@ class LocalExpirationNotificationScheduler
       summary.body,
       tz.TZDateTime.from(when, tz.local),
       _summaryNotificationDetails(),
-      payload: payload,
+      payload: _summaryPayload(
+        title: summary.title,
+        body: summary.body,
+        scheduledFor: when,
+      ),
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
     );
     if (showConfirmation) {
@@ -354,6 +561,11 @@ class LocalExpirationNotificationScheduler
           priority: Priority.defaultPriority,
         ),
       ),
+      payload: _notificationPayload(
+        type: _typeSnoozeConfirmation,
+        title: 'Summary snoozed',
+        body: 'Will remind again $dayLabel at $time.',
+      ),
     );
   }
 
@@ -369,8 +581,31 @@ class LocalExpirationNotificationScheduler
     return 'on ${DateFormat('yyyy-MM-dd').format(when)}';
   }
 
-  String _summaryPayload({required String title, required String body}) {
-    return jsonEncode({'type': 'summary', 'title': title, 'body': body});
+  String _summaryPayload({
+    required String title,
+    required String body,
+    required DateTime? scheduledFor,
+  }) {
+    return _notificationPayload(
+      type: _typeSummary,
+      title: title,
+      body: body,
+      scheduledFor: scheduledFor,
+    );
+  }
+
+  String _notificationPayload({
+    required String type,
+    required String title,
+    required String body,
+    DateTime? scheduledFor,
+  }) {
+    return jsonEncode({
+      'type': type,
+      'title': title,
+      'body': body,
+      if (scheduledFor != null) 'scheduled_for': scheduledFor.toIso8601String(),
+    });
   }
 
   _SummaryPayload _summaryFromPayload(String? payload) {
@@ -500,4 +735,28 @@ DateTime computeSnoozeTime({required DateTime now, required int targetHour}) {
   }
   final tomorrow = now.add(const Duration(days: 1));
   return DateTime(tomorrow.year, tomorrow.month, tomorrow.day, targetHour);
+}
+
+Map<String, dynamic> notificationPayloadMap(String? payload) {
+  if (payload == null || payload.isEmpty) {
+    return const <String, dynamic>{};
+  }
+  try {
+    final decoded = jsonDecode(payload);
+    if (decoded is Map<String, dynamic>) {
+      return decoded;
+    }
+  } catch (_) {
+    // Ignore malformed payload.
+  }
+  return const <String, dynamic>{};
+}
+
+DateTime? scheduledForFromPayload(String? payload) {
+  final map = notificationPayloadMap(payload);
+  final raw = map['scheduled_for'] as String?;
+  if (raw == null || raw.isEmpty) {
+    return null;
+  }
+  return DateTime.tryParse(raw);
 }
