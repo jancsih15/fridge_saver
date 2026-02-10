@@ -15,16 +15,30 @@ class RapidCaptureScreen extends StatefulWidget {
   State<RapidCaptureScreen> createState() => _RapidCaptureScreenState();
 }
 
+class _RapidDraft {
+  _RapidDraft({
+    required this.barcode,
+    required this.name,
+    required this.quantity,
+    required this.expirationDate,
+    required this.location,
+  });
+
+  final String barcode;
+  String name;
+  int quantity;
+  DateTime expirationDate;
+  StorageLocation location;
+}
+
 class _RapidCaptureScreenState extends State<RapidCaptureScreen> {
-  String? _barcode;
-  String? _name;
-  bool _isLookingUp = false;
-
-  final _quantityController = TextEditingController(text: '1');
-  DateTime _expirationDate = DateTime.now().add(const Duration(days: 3));
-  StorageLocation _location = StorageLocation.fridge;
-
   late final BarcodeLookupService _lookupService;
+  final List<_RapidDraft> _queue = [];
+  final Set<String> _activeLookups = <String>{};
+
+  String? _lastBarcode;
+  DateTime? _lastBarcodeAt;
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -32,82 +46,93 @@ class _RapidCaptureScreenState extends State<RapidCaptureScreen> {
     _lookupService = context.read<BarcodeLookupService>();
   }
 
-  @override
-  void dispose() {
-    _quantityController.dispose();
-    super.dispose();
-  }
-
   Future<void> _onDetect(BarcodeCapture capture) async {
-    if (!mounted || _isLookingUp) {
+    if (!mounted || _isSaving) {
       return;
     }
 
     final barcode = pickFirstBarcodeValue(
       capture.barcodes.map((barcode) => barcode.rawValue),
     );
-    if (barcode == null || barcode == _barcode) {
+    if (barcode == null) {
       return;
     }
 
+    final now = DateTime.now();
+    if (_lastBarcode == barcode &&
+        _lastBarcodeAt != null &&
+        now.difference(_lastBarcodeAt!).inMilliseconds < 1200) {
+      return;
+    }
+
+    _lastBarcode = barcode;
+    _lastBarcodeAt = now;
+
     setState(() {
-      _barcode = barcode;
-      _name = null;
-      _isLookingUp = true;
+      _queue.insert(
+        0,
+        _RapidDraft(
+          barcode: barcode,
+          name: 'Item $barcode',
+          quantity: 1,
+          expirationDate: DateTime.now().add(const Duration(days: 3)),
+          location: StorageLocation.fridge,
+        ),
+      );
     });
 
+    if (_activeLookups.contains(barcode)) {
+      return;
+    }
+    _activeLookups.add(barcode);
     final lookup = await _lookupService.lookupProduct(barcode);
-    if (!mounted || _barcode != barcode) {
+    _activeLookups.remove(barcode);
+    if (!mounted || lookup.status != BarcodeLookupStatus.found) {
       return;
     }
 
     setState(() {
-      _isLookingUp = false;
-      if (lookup.status == BarcodeLookupStatus.found) {
-        _name = lookup.productName;
-      } else {
-        _name = 'Item $barcode';
+      for (final draft in _queue) {
+        if (draft.barcode == barcode && draft.name == 'Item $barcode') {
+          draft.name = lookup.productName!;
+          break;
+        }
       }
     });
   }
 
-  Future<void> _saveAndContinue() async {
-    final barcode = _barcode;
-    final name = _name?.trim();
-    final quantity = int.tryParse(_quantityController.text) ?? 1;
-    if (barcode == null || name == null || name.isEmpty) {
+  Future<void> _saveAll() async {
+    if (_queue.isEmpty || _isSaving) {
       return;
     }
 
-    await context.read<InventoryController>().addItem(
-      name: name,
-      barcode: barcode,
-      quantity: quantity < 1 ? 1 : quantity,
-      expirationDate: _expirationDate,
-      location: _location,
-    );
+    setState(() => _isSaving = true);
+    final controller = context.read<InventoryController>();
+    for (final draft in _queue) {
+      await controller.addItem(
+        name: draft.name,
+        barcode: draft.barcode,
+        quantity: draft.quantity < 1 ? 1 : draft.quantity,
+        expirationDate: draft.expirationDate,
+        location: draft.location,
+      );
+    }
     if (!mounted) {
       return;
     }
 
+    final count = _queue.length;
+    setState(() {
+      _queue.clear();
+      _isSaving = false;
+    });
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text('Saved: $name')));
-
-    setState(() {
-      _barcode = null;
-      _name = null;
-      _isLookingUp = false;
-      _quantityController.text = '1';
-      _expirationDate = DateTime.now().add(const Duration(days: 3));
-      _location = StorageLocation.fridge;
-    });
+      ..showSnackBar(SnackBar(content: Text('Saved $count queued items.')));
   }
 
   @override
   Widget build(BuildContext context) {
-    final frameReady = _barcode != null && _name != null && !_isLookingUp;
-
     return Scaffold(
       appBar: AppBar(title: const Text('Rapid Capture')),
       body: Column(
@@ -138,10 +163,12 @@ class _RapidCaptureScreenState extends State<RapidCaptureScreen> {
                         width: double.infinity,
                         color: Colors.black54,
                         padding: const EdgeInsets.all(10),
-                        child: const Text(
-                          'Scan barcodes quickly and save in one tap',
+                        child: Text(
+                          _isSaving
+                              ? 'Saving queue...'
+                              : 'Scan continuously, then save all at once',
                           textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.white),
+                          style: const TextStyle(color: Colors.white),
                         ),
                       ),
                     ),
@@ -153,95 +180,89 @@ class _RapidCaptureScreenState extends State<RapidCaptureScreen> {
           Expanded(
             child: Padding(
               padding: const EdgeInsets.all(16),
-              child: _barcode == null
-                  ? const Center(
-                      child: Text(
-                        'Scan your first item barcode to start rapid capture.',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        'Queue (${_queue.length})',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                    )
-                  : Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _isLookingUp
-                              ? 'Looking up product...'
-                              : (_name ?? 'Unknown item'),
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text('Barcode: $_barcode'),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            SizedBox(
-                              width: 96,
-                              child: TextField(
-                                controller: _quantityController,
-                                keyboardType: TextInputType.number,
-                                decoration: const InputDecoration(
-                                  labelText: 'Qty',
-                                ),
-                              ),
+                      const Spacer(),
+                      TextButton.icon(
+                        onPressed: _queue.isEmpty
+                            ? null
+                            : () => setState(() => _queue.clear()),
+                        icon: const Icon(Icons.clear_all),
+                        label: const Text('Clear'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Expanded(
+                    child: _queue.isEmpty
+                        ? const Center(
+                            child: Text(
+                              'Start scanning items. They will be queued here.',
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: DropdownButtonFormField<StorageLocation>(
-                                value: _location,
-                                decoration: const InputDecoration(
-                                  labelText: 'Location',
+                          )
+                        : ListView.separated(
+                            itemCount: _queue.length,
+                            separatorBuilder: (_, __) =>
+                                const Divider(height: 1),
+                            itemBuilder: (context, index) {
+                              final item = _queue[index];
+                              return ListTile(
+                                title: Text(item.name),
+                                subtitle: Text(
+                                  '${item.barcode} - Qty ${item.quantity}',
                                 ),
-                                items: StorageLocation.values
-                                    .map(
-                                      (loc) => DropdownMenuItem(
-                                        value: loc,
-                                        child: Text(loc.name),
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      onPressed: item.quantity > 1
+                                          ? () => setState(
+                                              () => item.quantity -= 1,
+                                            )
+                                          : null,
+                                      icon: const Icon(Icons.remove_circle),
+                                    ),
+                                    IconButton(
+                                      onPressed: () =>
+                                          setState(() => item.quantity += 1),
+                                      icon: const Icon(Icons.add_circle),
+                                    ),
+                                    IconButton(
+                                      onPressed: () {
+                                        setState(() => _queue.removeAt(index));
+                                      },
+                                      icon: const Icon(
+                                        Icons.delete_outline,
+                                        color: Colors.red,
                                       ),
-                                    )
-                                    .toList(),
-                                onChanged: (value) {
-                                  if (value != null) {
-                                    setState(() => _location = value);
-                                  }
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: const Text('Expiration'),
-                          subtitle: Text(
-                            '${_expirationDate.year}-${_expirationDate.month.toString().padLeft(2, '0')}-${_expirationDate.day.toString().padLeft(2, '0')}',
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
                           ),
-                          trailing: const Icon(Icons.calendar_today_outlined),
-                          onTap: () async {
-                            final now = DateTime.now();
-                            final picked = await showDatePicker(
-                              context: context,
-                              initialDate: _expirationDate,
-                              firstDate: DateTime(now.year - 1),
-                              lastDate: DateTime(now.year + 5),
-                            );
-                            if (picked != null && mounted) {
-                              setState(() => _expirationDate = picked);
-                            }
-                          },
-                        ),
-                        const Spacer(),
-                        SizedBox(
-                          width: double.infinity,
-                          child: FilledButton.icon(
-                            onPressed: frameReady ? _saveAndContinue : null,
-                            icon: const Icon(Icons.flash_on),
-                            label: const Text('Save item and keep scanning'),
-                          ),
-                        ),
-                      ],
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: _queue.isEmpty || _isSaving ? null : _saveAll,
+                      icon: const Icon(Icons.save),
+                      label: const Text('Save all queued items'),
                     ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
