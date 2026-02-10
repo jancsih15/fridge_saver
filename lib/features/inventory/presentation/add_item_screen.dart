@@ -24,6 +24,13 @@ class AddItemInput {
   final StorageLocation location;
 }
 
+class _DateSuggestionSheetResult {
+  const _DateSuggestionSheetResult({this.date, this.requestAi = false});
+
+  final DateTime? date;
+  final bool requestAi;
+}
+
 class AddItemScreen extends StatefulWidget {
   const AddItemScreen({
     super.key,
@@ -112,20 +119,37 @@ class _AddItemScreenState extends State<AddItemScreen> {
         recognized.text,
         now: DateTime.now(),
       );
-      var aiResult = await _aiExpiryDateClient.suggestDateFromOcrText(
-        recognized.text,
-      );
 
-      if (aiResult.date == null) {
-        final imageBytes = await image.readAsBytes();
-        final imageAiResult = await _aiExpiryDateClient
-            .suggestDateFromImageBytes(imageBytes);
-        if (imageAiResult.date != null ||
-            aiResult.status != AiExpiryDateStatus.found) {
-          aiResult = imageAiResult;
+      if (!mounted) {
+        return;
+      }
+
+      if (localAnalysis.candidates.isNotEmpty) {
+        final ocrSelection = await _showDateSuggestionSheet(
+          localAnalysis,
+          title: 'OCR Date Suggestions',
+          allowTryAi: _aiExpiryDateClient.isEnabled,
+        );
+        if (ocrSelection == null || !mounted) {
+          _showInfo('Date scan canceled. (OCR only)');
+          return;
+        }
+
+        if (!ocrSelection.requestAi && ocrSelection.date != null) {
+          setState(() {
+            _expirationDate = ocrSelection.date!;
+          });
+          _showInfo(
+            'Expiration set to ${_formatDate(ocrSelection.date!)} (OCR)',
+          );
+          return;
         }
       }
 
+      final aiResult = await _resolveAiSuggestion(
+        ocrText: recognized.text,
+        image: image,
+      );
       final analysis = _mergeWithAiSuggestion(localAnalysis, aiResult.date);
 
       if (!mounted) {
@@ -139,17 +163,20 @@ class _AddItemScreenState extends State<AddItemScreen> {
         return;
       }
 
-      final selected = await _showDateSuggestionSheet(analysis);
-      if (selected == null || !mounted) {
+      final aiSelection = await _showDateSuggestionSheet(
+        analysis,
+        title: 'AI Date Suggestions',
+      );
+      if (aiSelection == null || aiSelection.date == null || !mounted) {
         _showInfo('Date scan canceled. (${_aiDebugLabelWithSource(aiResult)})');
         return;
       }
 
       setState(() {
-        _expirationDate = selected;
+        _expirationDate = aiSelection.date!;
       });
       _showInfo(
-        'Expiration set to ${_formatDate(selected)} (${_aiDebugLabelWithSource(aiResult)})',
+        'Expiration set to ${_formatDate(aiSelection.date!)} (${_aiDebugLabelWithSource(aiResult)})',
       );
     } catch (_) {
       if (!mounted) {
@@ -157,6 +184,26 @@ class _AddItemScreenState extends State<AddItemScreen> {
       }
       _showInfo('Could not process image for date OCR. Please pick manually.');
     }
+  }
+
+  Future<AiExpiryDateResult> _resolveAiSuggestion({
+    required String ocrText,
+    required XFile image,
+  }) async {
+    var aiResult = await _aiExpiryDateClient.suggestDateFromOcrText(ocrText);
+    if (aiResult.date != null || !_aiExpiryDateClient.isEnabled) {
+      return aiResult;
+    }
+
+    final imageBytes = await image.readAsBytes();
+    final imageAiResult = await _aiExpiryDateClient.suggestDateFromImageBytes(
+      imageBytes,
+    );
+    if (imageAiResult.date != null ||
+        aiResult.status != AiExpiryDateStatus.found) {
+      aiResult = imageAiResult;
+    }
+    return aiResult;
   }
 
   String _aiDebugLabel(AiExpiryDateStatus status) {
@@ -258,8 +305,12 @@ class _AddItemScreenState extends State<AddItemScreen> {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
-  Future<DateTime?> _showDateSuggestionSheet(ExpiryDateAnalysis analysis) {
-    return showModalBottomSheet<DateTime>(
+  Future<_DateSuggestionSheetResult?> _showDateSuggestionSheet(
+    ExpiryDateAnalysis analysis, {
+    required String title,
+    bool allowTryAi = false,
+  }) {
+    return showModalBottomSheet<_DateSuggestionSheetResult>(
       context: context,
       isScrollControlled: true,
       builder: (context) {
@@ -271,8 +322,8 @@ class _AddItemScreenState extends State<AddItemScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'OCR Date Suggestions',
+                Text(
+                  title,
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 8),
@@ -284,8 +335,9 @@ class _AddItemScreenState extends State<AddItemScreen> {
                 const SizedBox(height: 12),
                 if (analysis.suggestedDate != null)
                   FilledButton(
-                    onPressed: () =>
-                        Navigator.of(context).pop(analysis.suggestedDate),
+                    onPressed: () => Navigator.of(context).pop(
+                      _DateSuggestionSheetResult(date: analysis.suggestedDate),
+                    ),
                     child: Text(
                       'Use suggested: ${_formatDate(analysis.suggestedDate!)}',
                     ),
@@ -295,9 +347,18 @@ class _AddItemScreenState extends State<AddItemScreen> {
                   (date) => ListTile(
                     contentPadding: EdgeInsets.zero,
                     title: Text(_formatDate(date)),
-                    onTap: () => Navigator.of(context).pop(date),
+                    onTap: () => Navigator.of(
+                      context,
+                    ).pop(_DateSuggestionSheetResult(date: date)),
                   ),
                 ),
+                if (allowTryAi)
+                  OutlinedButton(
+                    onPressed: () => Navigator.of(
+                      context,
+                    ).pop(const _DateSuggestionSheetResult(requestAi: true)),
+                    child: const Text('Try AI suggestion'),
+                  ),
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(),
                   child: const Text('Cancel'),

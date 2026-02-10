@@ -1,17 +1,18 @@
-﻿import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:fridge_saver/features/inventory/data/inventory_repository.dart';
 import 'package:fridge_saver/features/inventory/domain/fridge_item.dart';
 import 'package:fridge_saver/features/inventory/presentation/inventory_controller.dart';
 
 class _FakeInventoryRepository implements InventoryRepository {
   _FakeInventoryRepository({List<FridgeItem>? initialItems})
-      : _storedItems = List<FridgeItem>.from(initialItems ?? []);
+    : _storedItems = List<FridgeItem>.from(initialItems ?? []);
 
   List<FridgeItem> _storedItems;
   int saveCalls = 0;
 
   @override
-  Future<List<FridgeItem>> loadItems() async => List<FridgeItem>.from(_storedItems);
+  Future<List<FridgeItem>> loadItems() async =>
+      List<FridgeItem>.from(_storedItems);
 
   @override
   Future<void> saveItems(List<FridgeItem> items) async {
@@ -65,17 +66,83 @@ void main() {
       expect(repo.saveCalls, 1);
     });
 
-    test('updates item and persists changes', () async {
-      final repo = _FakeInventoryRepository(initialItems: [
-        FridgeItem(
-          id: '1',
-          name: 'Milk',
-          barcode: null,
-          quantity: 1,
-          expirationDate: DateTime(2026, 2, 15),
+    test(
+      'adds exact duplicate by merging quantity into existing item',
+      () async {
+        final repo = _FakeInventoryRepository(
+          initialItems: [
+            FridgeItem(
+              id: '1',
+              name: 'Yogurt',
+              barcode: '599001',
+              quantity: 2,
+              expirationDate: DateTime(2026, 2, 12),
+              location: StorageLocation.fridge,
+            ),
+          ],
+        );
+        final controller = InventoryController(repository: repo);
+        await controller.load();
+
+        await controller.addItem(
+          name: ' Yogurt ',
+          barcode: '599001',
+          quantity: 3,
+          expirationDate: DateTime(2026, 2, 12, 23, 59),
           location: StorageLocation.fridge,
-        ),
-      ]);
+        );
+
+        expect(controller.allItems.length, 1);
+        expect(controller.allItems.single.id, '1');
+        expect(controller.allItems.single.quantity, 5);
+        expect(repo.saveCalls, 1);
+      },
+    );
+
+    test('keeps separate items when expiration dates are different', () async {
+      final repo = _FakeInventoryRepository(
+        initialItems: [
+          FridgeItem(
+            id: '1',
+            name: 'Yogurt',
+            barcode: '599001',
+            quantity: 2,
+            expirationDate: DateTime(2026, 2, 12),
+            location: StorageLocation.fridge,
+          ),
+        ],
+      );
+      final controller = InventoryController(repository: repo);
+      await controller.load();
+
+      await controller.addItem(
+        name: 'Yogurt',
+        barcode: '599001',
+        quantity: 3,
+        expirationDate: DateTime(2026, 2, 13),
+        location: StorageLocation.fridge,
+      );
+
+      expect(controller.allItems.length, 2);
+      expect(
+        controller.allItems.map((e) => e.expirationDate),
+        containsAll([DateTime(2026, 2, 12), DateTime(2026, 2, 13)]),
+      );
+    });
+
+    test('updates item and persists changes', () async {
+      final repo = _FakeInventoryRepository(
+        initialItems: [
+          FridgeItem(
+            id: '1',
+            name: 'Milk',
+            barcode: null,
+            quantity: 1,
+            expirationDate: DateTime(2026, 2, 15),
+            location: StorageLocation.fridge,
+          ),
+        ],
+      );
 
       final controller = InventoryController(repository: repo);
       await controller.load();
@@ -97,17 +164,62 @@ void main() {
       expect(repo.saveCalls, 1);
     });
 
-    test('deletes item by id and persists', () async {
-      final repo = _FakeInventoryRepository(initialItems: [
-        FridgeItem(
+    test(
+      'editing into exact duplicate merges quantities and removes edited item',
+      () async {
+        final repo = _FakeInventoryRepository(
+          initialItems: [
+            FridgeItem(
+              id: '1',
+              name: 'Milk',
+              barcode: '111',
+              quantity: 1,
+              expirationDate: DateTime(2026, 2, 15),
+              location: StorageLocation.fridge,
+            ),
+            FridgeItem(
+              id: '2',
+              name: 'Juice',
+              barcode: '222',
+              quantity: 4,
+              expirationDate: DateTime(2026, 2, 20),
+              location: StorageLocation.fridge,
+            ),
+          ],
+        );
+
+        final controller = InventoryController(repository: repo);
+        await controller.load();
+
+        await controller.updateItem(
           id: '1',
-          name: 'Milk',
-          barcode: null,
-          quantity: 1,
-          expirationDate: DateTime(2026, 2, 15),
+          name: 'Juice',
+          barcode: '222',
+          quantity: 2,
+          expirationDate: DateTime(2026, 2, 20),
           location: StorageLocation.fridge,
-        ),
-      ]);
+        );
+
+        expect(controller.allItems.length, 1);
+        expect(controller.allItems.single.id, '2');
+        expect(controller.allItems.single.quantity, 6);
+        expect(repo.saveCalls, 1);
+      },
+    );
+
+    test('deletes item by id and persists', () async {
+      final repo = _FakeInventoryRepository(
+        initialItems: [
+          FridgeItem(
+            id: '1',
+            name: 'Milk',
+            barcode: null,
+            quantity: 1,
+            expirationDate: DateTime(2026, 2, 15),
+            location: StorageLocation.fridge,
+          ),
+        ],
+      );
 
       final controller = InventoryController(repository: repo);
       await controller.load();
@@ -122,24 +234,26 @@ void main() {
     });
 
     test('restores deleted item and persists', () async {
-      final repo = _FakeInventoryRepository(initialItems: [
-        FridgeItem(
-          id: '1',
-          name: 'Milk',
-          barcode: null,
-          quantity: 1,
-          expirationDate: DateTime(2026, 2, 15),
-          location: StorageLocation.fridge,
-        ),
-        FridgeItem(
-          id: '2',
-          name: 'Eggs',
-          barcode: null,
-          quantity: 6,
-          expirationDate: DateTime(2026, 2, 16),
-          location: StorageLocation.fridge,
-        ),
-      ]);
+      final repo = _FakeInventoryRepository(
+        initialItems: [
+          FridgeItem(
+            id: '1',
+            name: 'Milk',
+            barcode: null,
+            quantity: 1,
+            expirationDate: DateTime(2026, 2, 15),
+            location: StorageLocation.fridge,
+          ),
+          FridgeItem(
+            id: '2',
+            name: 'Eggs',
+            barcode: null,
+            quantity: 6,
+            expirationDate: DateTime(2026, 2, 16),
+            location: StorageLocation.fridge,
+          ),
+        ],
+      );
 
       final controller = InventoryController(repository: repo);
       await controller.load();
@@ -154,16 +268,18 @@ void main() {
     });
 
     test('restore clamps out-of-range index to end of list', () async {
-      final repo = _FakeInventoryRepository(initialItems: [
-        FridgeItem(
-          id: '2',
-          name: 'Eggs',
-          barcode: null,
-          quantity: 6,
-          expirationDate: DateTime(2026, 2, 16),
-          location: StorageLocation.fridge,
-        ),
-      ]);
+      final repo = _FakeInventoryRepository(
+        initialItems: [
+          FridgeItem(
+            id: '2',
+            name: 'Eggs',
+            barcode: null,
+            quantity: 6,
+            expirationDate: DateTime(2026, 2, 16),
+            location: StorageLocation.fridge,
+          ),
+        ],
+      );
 
       final controller = InventoryController(repository: repo);
       await controller.load();
@@ -187,24 +303,26 @@ void main() {
 
     test('filters expiring soon items within 3 days', () async {
       final now = DateTime(2026, 2, 9);
-      final repo = _FakeInventoryRepository(initialItems: [
-        FridgeItem(
-          id: '1',
-          name: 'Yogurt',
-          barcode: null,
-          quantity: 1,
-          expirationDate: DateTime(2026, 2, 11),
-          location: StorageLocation.fridge,
-        ),
-        FridgeItem(
-          id: '2',
-          name: 'Rice',
-          barcode: null,
-          quantity: 1,
-          expirationDate: DateTime(2026, 2, 20),
-          location: StorageLocation.pantry,
-        ),
-      ]);
+      final repo = _FakeInventoryRepository(
+        initialItems: [
+          FridgeItem(
+            id: '1',
+            name: 'Yogurt',
+            barcode: null,
+            quantity: 1,
+            expirationDate: DateTime(2026, 2, 11),
+            location: StorageLocation.fridge,
+          ),
+          FridgeItem(
+            id: '2',
+            name: 'Rice',
+            barcode: null,
+            quantity: 1,
+            expirationDate: DateTime(2026, 2, 20),
+            location: StorageLocation.pantry,
+          ),
+        ],
+      );
 
       final controller = InventoryController(repository: repo, now: () => now);
       await controller.load();

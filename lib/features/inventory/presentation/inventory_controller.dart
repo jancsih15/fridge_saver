@@ -1,4 +1,4 @@
-﻿import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
 import '../data/inventory_repository.dart';
@@ -7,10 +7,7 @@ import '../domain/fridge_item.dart';
 typedef NowProvider = DateTime Function();
 
 class DeletedInventoryItem {
-  DeletedInventoryItem({
-    required this.item,
-    required this.index,
-  });
+  DeletedInventoryItem({required this.item, required this.index});
 
   final FridgeItem item;
   final int index;
@@ -21,9 +18,9 @@ class InventoryController extends ChangeNotifier {
     required InventoryRepository repository,
     NowProvider? now,
     Uuid? uuid,
-  })  : _repository = repository,
-        _now = now ?? DateTime.now,
-        _uuid = uuid ?? const Uuid();
+  }) : _repository = repository,
+       _now = now ?? DateTime.now,
+       _uuid = uuid ?? const Uuid();
 
   final InventoryRepository _repository;
   final NowProvider _now;
@@ -59,24 +56,44 @@ class InventoryController extends ChangeNotifier {
     String? barcode,
   }) async {
     final trimmedName = name.trim();
+    final normalizedBarcode = _normalizeBarcode(barcode);
+    final normalizedDate = _normalizeDate(expirationDate);
     if (trimmedName.isEmpty) {
       return;
     }
 
-    _items.add(
-      FridgeItem(
-        id: _uuid.v4(),
+    final duplicateIndex = _items.indexWhere(
+      (item) => _isSameBatch(
+        item: item,
         name: trimmedName,
-        barcode: barcode?.trim().isEmpty ?? true ? null : barcode?.trim(),
-        quantity: quantity,
-        expirationDate: DateTime(
-          expirationDate.year,
-          expirationDate.month,
-          expirationDate.day,
-        ),
+        barcode: normalizedBarcode,
+        expirationDate: normalizedDate,
         location: location,
       ),
     );
+
+    if (duplicateIndex != -1) {
+      final existing = _items[duplicateIndex];
+      _items[duplicateIndex] = FridgeItem(
+        id: existing.id,
+        name: existing.name,
+        barcode: existing.barcode,
+        quantity: existing.quantity + quantity,
+        expirationDate: existing.expirationDate,
+        location: existing.location,
+      );
+    } else {
+      _items.add(
+        FridgeItem(
+          id: _uuid.v4(),
+          name: trimmedName,
+          barcode: normalizedBarcode,
+          quantity: quantity,
+          expirationDate: normalizedDate,
+          location: location,
+        ),
+      );
+    }
 
     await _repository.saveItems(_items);
     notifyListeners();
@@ -96,22 +113,45 @@ class InventoryController extends ChangeNotifier {
     }
 
     final trimmedName = name.trim();
+    final normalizedBarcode = _normalizeBarcode(barcode);
+    final normalizedDate = _normalizeDate(expirationDate);
     if (trimmedName.isEmpty) {
       return;
     }
 
-    _items[index] = FridgeItem(
-      id: id,
-      name: trimmedName,
-      barcode: barcode?.trim().isEmpty ?? true ? null : barcode?.trim(),
-      quantity: quantity,
-      expirationDate: DateTime(
-        expirationDate.year,
-        expirationDate.month,
-        expirationDate.day,
-      ),
-      location: location,
+    final duplicateIndex = _items.indexWhere(
+      (item) =>
+          item.id != id &&
+          _isSameBatch(
+            item: item,
+            name: trimmedName,
+            barcode: normalizedBarcode,
+            expirationDate: normalizedDate,
+            location: location,
+          ),
     );
+
+    if (duplicateIndex != -1) {
+      final duplicate = _items[duplicateIndex];
+      _items[duplicateIndex] = FridgeItem(
+        id: duplicate.id,
+        name: duplicate.name,
+        barcode: duplicate.barcode,
+        quantity: duplicate.quantity + quantity,
+        expirationDate: duplicate.expirationDate,
+        location: duplicate.location,
+      );
+      _items.removeAt(index);
+    } else {
+      _items[index] = FridgeItem(
+        id: id,
+        name: trimmedName,
+        barcode: normalizedBarcode,
+        quantity: quantity,
+        expirationDate: normalizedDate,
+        location: location,
+      );
+    }
 
     await _repository.saveItems(_items);
     notifyListeners();
@@ -157,5 +197,30 @@ class InventoryController extends ChangeNotifier {
     final today = DateTime(now.year, now.month, now.day);
     final diffDays = item.expirationDate.difference(today).inDays;
     return diffDays >= 0 && diffDays <= 3;
+  }
+
+  String? _normalizeBarcode(String? barcode) {
+    final trimmed = barcode?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return null;
+    }
+    return trimmed;
+  }
+
+  DateTime _normalizeDate(DateTime date) {
+    return DateTime(date.year, date.month, date.day);
+  }
+
+  bool _isSameBatch({
+    required FridgeItem item,
+    required String name,
+    required String? barcode,
+    required DateTime expirationDate,
+    required StorageLocation location,
+  }) {
+    return item.name.toLowerCase() == name.toLowerCase() &&
+        item.barcode == barcode &&
+        item.expirationDate == expirationDate &&
+        item.location == location;
   }
 }
