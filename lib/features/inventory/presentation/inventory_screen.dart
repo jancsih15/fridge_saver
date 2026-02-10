@@ -6,6 +6,7 @@ import '../domain/fridge_item.dart';
 import 'add_item_screen.dart';
 import 'app_settings_screen.dart';
 import 'inventory_controller.dart';
+import 'rapid_capture_screen.dart';
 
 class InventoryScreen extends StatelessWidget {
   const InventoryScreen({super.key});
@@ -122,12 +123,32 @@ class InventoryScreen extends StatelessWidget {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _openAddItem(context),
-        icon: const Icon(Icons.add),
-        label: const Text('Add item'),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          FloatingActionButton.extended(
+            heroTag: 'rapidCapture',
+            onPressed: () => _openRapidCapture(context),
+            icon: const Icon(Icons.bolt),
+            label: const Text('Rapid capture'),
+          ),
+          const SizedBox(height: 10),
+          FloatingActionButton.extended(
+            heroTag: 'addItem',
+            onPressed: () => _openAddItem(context),
+            icon: const Icon(Icons.add),
+            label: const Text('Add item'),
+          ),
+        ],
       ),
     );
+  }
+
+  Future<void> _openRapidCapture(BuildContext context) async {
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const RapidCaptureScreen()));
   }
 
   Future<void> _openAddItem(BuildContext context) async {
