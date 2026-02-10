@@ -29,10 +29,36 @@ class InventoryScreen extends StatelessWidget {
       ),
       body: Column(
         children: [
-          SwitchListTile(
-            title: const Text('Expiring within 3 days'),
-            value: controller.expiringSoonOnly,
-            onChanged: controller.setExpiringSoonOnly,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  const Text('Filter:'),
+                  ...const [
+                    (label: 'All', value: null),
+                    (label: 'Today', value: 0),
+                    (label: '1 day', value: 1),
+                    (label: '3 days', value: 3),
+                    (label: '7 days', value: 7),
+                  ].map(
+                    (option) => ChoiceChip(
+                      label: Text(option.label),
+                      selected: controller.expiringWithinDays == option.value,
+                      onSelected: (_) {
+                        context
+                            .read<InventoryController>()
+                            .setExpiringWithinDays(option.value);
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
           Expanded(
             child: controller.visibleItems.isEmpty
@@ -82,7 +108,7 @@ class InventoryScreen extends StatelessWidget {
                           onTap: () => _openEditItem(context, item),
                           title: Text(item.name),
                           subtitle: Text(
-                            '${item.location.name} • Qty ${item.quantity} • Expires ${DateFormat.yMMMd().format(item.expirationDate)}',
+                            '${item.location.name} - Qty ${item.quantity} - Expires ${DateFormat.yMMMd().format(item.expirationDate)}',
                           ),
                           trailing: IconButton(
                             icon: const Icon(Icons.edit),

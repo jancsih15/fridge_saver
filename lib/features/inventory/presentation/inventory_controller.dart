@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
+import '../data/expiring_filter_settings_repository.dart';
 import '../data/expiration_notification_scheduler.dart';
 import '../data/inventory_repository.dart';
 import '../domain/fridge_item.dart';
@@ -17,28 +18,33 @@ class DeletedInventoryItem {
 class InventoryController extends ChangeNotifier {
   InventoryController({
     required InventoryRepository repository,
+    ExpiringFilterSettingsRepository? filterSettingsRepository,
     ExpirationNotificationScheduler? notificationScheduler,
     NowProvider? now,
     Uuid? uuid,
   }) : _repository = repository,
+       _filterSettingsRepository = filterSettingsRepository,
        _notificationScheduler = notificationScheduler,
        _now = now ?? DateTime.now,
        _uuid = uuid ?? const Uuid();
 
   final InventoryRepository _repository;
+  final ExpiringFilterSettingsRepository? _filterSettingsRepository;
   final ExpirationNotificationScheduler? _notificationScheduler;
   final NowProvider _now;
   final Uuid _uuid;
 
   final List<FridgeItem> _items = [];
-  bool _expiringSoonOnly = false;
+  int? _expiringWithinDays;
 
   List<FridgeItem> get allItems => List.unmodifiable(_items);
-  bool get expiringSoonOnly => _expiringSoonOnly;
+  int? get expiringWithinDays => _expiringWithinDays;
 
   List<FridgeItem> get visibleItems {
-    final source = _expiringSoonOnly
-        ? _items.where(_isExpiringSoon).toList(growable: false)
+    final source = _expiringWithinDays != null
+        ? _items
+              .where((item) => _isExpiringWithin(item, _expiringWithinDays!))
+              .toList(growable: false)
         : _items;
     final sorted = List<FridgeItem>.from(source);
     sorted.sort((a, b) => a.expirationDate.compareTo(b.expirationDate));
@@ -49,6 +55,7 @@ class InventoryController extends ChangeNotifier {
     _items
       ..clear()
       ..addAll(await _repository.loadItems());
+    _expiringWithinDays = await _filterSettingsRepository?.loadDays();
     await _syncNotifications();
     notifyListeners();
   }
@@ -196,16 +203,17 @@ class InventoryController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setExpiringSoonOnly(bool value) {
-    _expiringSoonOnly = value;
+  Future<void> setExpiringWithinDays(int? days) async {
+    _expiringWithinDays = days;
+    await _filterSettingsRepository?.saveDays(days);
     notifyListeners();
   }
 
-  bool _isExpiringSoon(FridgeItem item) {
+  bool _isExpiringWithin(FridgeItem item, int days) {
     final now = _now();
     final today = DateTime(now.year, now.month, now.day);
     final diffDays = item.expirationDate.difference(today).inDays;
-    return diffDays >= 0 && diffDays <= 3;
+    return diffDays >= 0 && diffDays <= days;
   }
 
   String? _normalizeBarcode(String? barcode) {

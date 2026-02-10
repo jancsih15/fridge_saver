@@ -5,11 +5,14 @@ import 'package:provider/provider.dart';
 import 'features/inventory/data/barcode_lookup_cache_repository.dart';
 import 'features/inventory/data/barcode_lookup_service.dart';
 import 'features/inventory/data/barcode_lookup_settings_repository.dart';
+import 'features/inventory/data/expiring_filter_settings_repository.dart';
 import 'features/inventory/data/expiration_notification_scheduler.dart';
 import 'features/inventory/data/inventory_repository.dart';
 import 'features/inventory/presentation/barcode_lookup_settings_controller.dart';
 import 'features/inventory/presentation/inventory_controller.dart';
 import 'features/inventory/presentation/inventory_screen.dart';
+
+final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
 
 class FridgeSaverApp extends StatelessWidget {
   const FridgeSaverApp({super.key});
@@ -23,11 +26,24 @@ class FridgeSaverApp extends StatelessWidget {
             if (kIsWeb) {
               return null;
             }
-            final scheduler = LocalExpirationNotificationScheduler();
+            final scheduler = LocalExpirationNotificationScheduler(
+              onOpenExpiringToday: () async {
+                appNavigatorKey.currentState?.popUntil(
+                  (route) => route.isFirst,
+                );
+                final currentContext = appNavigatorKey.currentContext;
+                if (currentContext != null) {
+                  await currentContext
+                      .read<InventoryController>()
+                      .setExpiringWithinDays(0);
+                }
+              },
+            );
             scheduler.initialize();
             return scheduler;
           },
         ),
+        Provider(create: (_) => ExpiringFilterSettingsRepository()),
         Provider(create: (_) => BarcodeLookupSettingsRepository()),
         Provider(create: (_) => BarcodeLookupCacheRepository()),
         ProxyProvider2<
@@ -49,12 +65,15 @@ class FridgeSaverApp extends StatelessWidget {
         ChangeNotifierProvider(
           create: (context) => InventoryController(
             repository: HiveInventoryRepository(),
+            filterSettingsRepository: context
+                .read<ExpiringFilterSettingsRepository>(),
             notificationScheduler: context
                 .read<ExpirationNotificationScheduler?>(),
           )..load(),
         ),
       ],
       child: MaterialApp(
+        navigatorKey: appNavigatorKey,
         title: 'Fridge Saver',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'barcode_lookup_settings_screen.dart';
 import 'debug_tools_screen.dart';
+import 'notification_settings_screen.dart';
 
 class AppSettingsScreen extends StatelessWidget {
   const AppSettingsScreen({super.key});
@@ -12,6 +13,20 @@ class AppSettingsScreen extends StatelessWidget {
       appBar: AppBar(title: const Text('Settings')),
       body: ListView(
         children: [
+          ListTile(
+            leading: const Icon(Icons.notifications_active_outlined),
+            title: const Text('Notifications'),
+            subtitle: const Text(
+              'Snooze summary reminders and adjust notification behavior.',
+            ),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const NotificationSettingsScreen(),
+                ),
+              );
+            },
+          ),
           ListTile(
             leading: const Icon(Icons.qr_code_scanner_outlined),
             title: const Text('Barcode Providers'),

@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fridge_saver/features/inventory/data/expiring_filter_settings_repository.dart';
 import 'package:fridge_saver/features/inventory/data/expiration_notification_scheduler.dart';
 import 'package:fridge_saver/features/inventory/data/inventory_repository.dart';
 import 'package:fridge_saver/features/inventory/domain/fridge_item.dart';
@@ -37,6 +38,33 @@ class _FakeNotificationScheduler implements ExpirationNotificationScheduler {
 
   @override
   Future<void> sendTestNotification() async {}
+
+  @override
+  Future<void> sendDailySummaryTestNotification(List<FridgeItem> items) async {}
+
+  @override
+  Future<DateTime?> snoozeDailySummary({
+    required List<FridgeItem> items,
+    required int targetHour,
+  }) async {
+    return null;
+  }
+}
+
+class _FakeExpiringFilterSettingsRepository
+    implements ExpiringFilterSettingsRepository {
+  _FakeExpiringFilterSettingsRepository({this.initialValue});
+
+  int? initialValue;
+  int? savedValue;
+
+  @override
+  Future<int?> loadDays() async => initialValue;
+
+  @override
+  Future<void> saveDays(int? days) async {
+    savedValue = days;
+  }
 }
 
 void main() {
@@ -57,7 +85,7 @@ void main() {
 
       expect(controller.allItems.length, 1);
       expect(controller.allItems.first.name, 'Milk');
-      expect(controller.expiringSoonOnly, isFalse);
+      expect(controller.expiringWithinDays, isNull);
       expect(controller.visibleItems.length, 1);
     });
 
@@ -397,10 +425,61 @@ void main() {
 
       final controller = InventoryController(repository: repo, now: () => now);
       await controller.load();
-      controller.setExpiringSoonOnly(true);
+      await controller.setExpiringWithinDays(3);
 
       expect(controller.visibleItems.length, 1);
       expect(controller.visibleItems.first.name, 'Yogurt');
+    });
+
+    test('loads persisted expiring filter days and applies it', () async {
+      final now = DateTime(2026, 2, 9);
+      final repo = _FakeInventoryRepository(
+        initialItems: [
+          FridgeItem(
+            id: '1',
+            name: 'Yogurt',
+            barcode: null,
+            quantity: 1,
+            expirationDate: DateTime(2026, 2, 11),
+            location: StorageLocation.fridge,
+          ),
+          FridgeItem(
+            id: '2',
+            name: 'Rice',
+            barcode: null,
+            quantity: 1,
+            expirationDate: DateTime(2026, 2, 20),
+            location: StorageLocation.pantry,
+          ),
+        ],
+      );
+      final filterRepo = _FakeExpiringFilterSettingsRepository(initialValue: 3);
+      final controller = InventoryController(
+        repository: repo,
+        filterSettingsRepository: filterRepo,
+        now: () => now,
+      );
+
+      await controller.load();
+
+      expect(controller.expiringWithinDays, 3);
+      expect(controller.visibleItems.length, 1);
+      expect(controller.visibleItems.first.id, '1');
+    });
+
+    test('persists expiring filter days when changed', () async {
+      final repo = _FakeInventoryRepository();
+      final filterRepo = _FakeExpiringFilterSettingsRepository();
+      final controller = InventoryController(
+        repository: repo,
+        filterSettingsRepository: filterRepo,
+      );
+
+      await controller.load();
+      await controller.setExpiringWithinDays(7);
+
+      expect(controller.expiringWithinDays, 7);
+      expect(filterRepo.savedValue, 7);
     });
   });
 }
