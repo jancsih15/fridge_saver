@@ -35,6 +35,18 @@ class _RapidDraft {
   StorageLocation location;
 }
 
+enum _RapidItemAction {
+  quantityMinus1,
+  quantityPlus1,
+  quantitySet1,
+  quantitySet2,
+  quantitySet6,
+  locationFridge,
+  locationFreezer,
+  locationPantry,
+  delete,
+}
+
 class _RapidCaptureScreenState extends State<RapidCaptureScreen> {
   late final BarcodeLookupService _lookupService;
   late final RapidCapturePreferencesRepository _prefsRepository;
@@ -365,7 +377,11 @@ class _RapidCaptureScreenState extends State<RapidCaptureScreen> {
                             itemBuilder: (context, index) {
                               final item = _queue[index];
                               return ListTile(
-                                title: Text(item.name),
+                                title: Text(
+                                  item.name,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                                 subtitle: Text(
                                   '${item.barcode} - Qty ${item.quantity} - ${item.location.name}\nExp: ${item.expirationDate.year}-${item.expirationDate.month.toString().padLeft(2, '0')}-${item.expirationDate.day.toString().padLeft(2, '0')}',
                                 ),
@@ -373,43 +389,6 @@ class _RapidCaptureScreenState extends State<RapidCaptureScreen> {
                                 trailing: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    PopupMenuButton<int>(
-                                      tooltip: 'Quick quantity',
-                                      onSelected: (value) =>
-                                          setState(() => item.quantity = value),
-                                      itemBuilder: (context) => const [
-                                        PopupMenuItem(
-                                          value: 1,
-                                          child: Text('Qty 1'),
-                                        ),
-                                        PopupMenuItem(
-                                          value: 2,
-                                          child: Text('Qty 2'),
-                                        ),
-                                        PopupMenuItem(
-                                          value: 6,
-                                          child: Text('Qty 6'),
-                                        ),
-                                      ],
-                                      icon: const Icon(Icons.flash_on_outlined),
-                                    ),
-                                    PopupMenuButton<StorageLocation>(
-                                      tooltip: 'Change location',
-                                      onSelected: (value) => setState(() {
-                                        item.location = value;
-                                        _defaultLocation = value;
-                                      }),
-                                      itemBuilder: (context) => StorageLocation
-                                          .values
-                                          .map(
-                                            (loc) => PopupMenuItem(
-                                              value: loc,
-                                              child: Text(loc.name),
-                                            ),
-                                          )
-                                          .toList(growable: false),
-                                      icon: const Icon(Icons.kitchen_outlined),
-                                    ),
                                     IconButton(
                                       tooltip: 'Scan expiry photo',
                                       onPressed: () =>
@@ -418,27 +397,56 @@ class _RapidCaptureScreenState extends State<RapidCaptureScreen> {
                                         Icons.document_scanner_outlined,
                                       ),
                                     ),
-                                    IconButton(
-                                      onPressed: item.quantity > 1
-                                          ? () => setState(
-                                              () => item.quantity -= 1,
-                                            )
-                                          : null,
-                                      icon: const Icon(Icons.remove_circle),
-                                    ),
-                                    IconButton(
-                                      onPressed: () =>
-                                          setState(() => item.quantity += 1),
-                                      icon: const Icon(Icons.add_circle),
-                                    ),
-                                    IconButton(
-                                      onPressed: () {
-                                        setState(() => _queue.removeAt(index));
-                                      },
-                                      icon: const Icon(
-                                        Icons.delete_outline,
-                                        color: Colors.red,
-                                      ),
+                                    PopupMenuButton<_RapidItemAction>(
+                                      tooltip: 'Item actions',
+                                      onSelected: (action) =>
+                                          _applyItemAction(index, action),
+                                      itemBuilder: (context) => const [
+                                        PopupMenuItem(
+                                          value: _RapidItemAction.quantityPlus1,
+                                          child: Text('Qty +1'),
+                                        ),
+                                        PopupMenuItem(
+                                          value:
+                                              _RapidItemAction.quantityMinus1,
+                                          child: Text('Qty -1'),
+                                        ),
+                                        PopupMenuDivider(),
+                                        PopupMenuItem(
+                                          value: _RapidItemAction.quantitySet1,
+                                          child: Text('Set Qty 1'),
+                                        ),
+                                        PopupMenuItem(
+                                          value: _RapidItemAction.quantitySet2,
+                                          child: Text('Set Qty 2'),
+                                        ),
+                                        PopupMenuItem(
+                                          value: _RapidItemAction.quantitySet6,
+                                          child: Text('Set Qty 6'),
+                                        ),
+                                        PopupMenuDivider(),
+                                        PopupMenuItem(
+                                          value:
+                                              _RapidItemAction.locationFridge,
+                                          child: Text('Location: fridge'),
+                                        ),
+                                        PopupMenuItem(
+                                          value:
+                                              _RapidItemAction.locationFreezer,
+                                          child: Text('Location: freezer'),
+                                        ),
+                                        PopupMenuItem(
+                                          value:
+                                              _RapidItemAction.locationPantry,
+                                          child: Text('Location: pantry'),
+                                        ),
+                                        PopupMenuDivider(),
+                                        PopupMenuItem(
+                                          value: _RapidItemAction.delete,
+                                          child: Text('Remove item'),
+                                        ),
+                                      ],
+                                      icon: const Icon(Icons.more_vert),
                                     ),
                                   ],
                                 ),
@@ -462,5 +470,48 @@ class _RapidCaptureScreenState extends State<RapidCaptureScreen> {
         ],
       ),
     );
+  }
+
+  void _applyItemAction(int index, _RapidItemAction action) {
+    if (index < 0 || index >= _queue.length) {
+      return;
+    }
+    setState(() {
+      final item = _queue[index];
+      switch (action) {
+        case _RapidItemAction.quantityPlus1:
+          item.quantity += 1;
+          break;
+        case _RapidItemAction.quantityMinus1:
+          if (item.quantity > 1) {
+            item.quantity -= 1;
+          }
+          break;
+        case _RapidItemAction.quantitySet1:
+          item.quantity = 1;
+          break;
+        case _RapidItemAction.quantitySet2:
+          item.quantity = 2;
+          break;
+        case _RapidItemAction.quantitySet6:
+          item.quantity = 6;
+          break;
+        case _RapidItemAction.locationFridge:
+          item.location = StorageLocation.fridge;
+          _defaultLocation = StorageLocation.fridge;
+          break;
+        case _RapidItemAction.locationFreezer:
+          item.location = StorageLocation.freezer;
+          _defaultLocation = StorageLocation.freezer;
+          break;
+        case _RapidItemAction.locationPantry:
+          item.location = StorageLocation.pantry;
+          _defaultLocation = StorageLocation.pantry;
+          break;
+        case _RapidItemAction.delete:
+          _queue.removeAt(index);
+          break;
+      }
+    });
   }
 }
