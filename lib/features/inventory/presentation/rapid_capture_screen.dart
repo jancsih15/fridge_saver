@@ -538,6 +538,8 @@ class _RapidCaptureScreenState extends State<RapidCaptureScreen> {
     setState(() {
       final item = _queue[index];
       switch (action) {
+        case _RapidItemAction.editName:
+          break;
         case _RapidItemAction.quantityPlus1:
           item.quantity += 1;
           break;
