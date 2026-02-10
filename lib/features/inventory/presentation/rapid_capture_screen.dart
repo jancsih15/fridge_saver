@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
 
@@ -6,6 +8,7 @@ import '../data/barcode_lookup_models.dart';
 import '../data/barcode_lookup_service.dart';
 import '../domain/fridge_item.dart';
 import 'barcode_value_parser.dart';
+import 'expiry_date_parser.dart';
 import 'inventory_controller.dart';
 
 class RapidCaptureScreen extends StatefulWidget {
@@ -33,6 +36,8 @@ class _RapidDraft {
 
 class _RapidCaptureScreenState extends State<RapidCaptureScreen> {
   late final BarcodeLookupService _lookupService;
+  final _textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
+  final _imagePicker = ImagePicker();
   final List<_RapidDraft> _queue = [];
   final Set<String> _activeLookups = <String>{};
 
@@ -44,6 +49,12 @@ class _RapidCaptureScreenState extends State<RapidCaptureScreen> {
   void initState() {
     super.initState();
     _lookupService = context.read<BarcodeLookupService>();
+  }
+
+  @override
+  void dispose() {
+    _textRecognizer.close();
+    super.dispose();
   }
 
   Future<void> _onDetect(BarcodeCapture capture) async {
@@ -129,6 +140,107 @@ class _RapidCaptureScreenState extends State<RapidCaptureScreen> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text('Saved $count queued items.')));
+  }
+
+  Future<void> _captureExpiryForIndex(int index) async {
+    if (index < 0 || index >= _queue.length) {
+      return;
+    }
+
+    final image = await _imagePicker.pickImage(source: ImageSource.camera);
+    if (image == null || !mounted) {
+      return;
+    }
+
+    try {
+      final inputImage = InputImage.fromFilePath(image.path);
+      final recognized = await _textRecognizer.processImage(inputImage);
+      final analysis = analyzeExpirationDateText(
+        recognized.text,
+        now: DateTime.now(),
+      );
+      if (!mounted) {
+        return;
+      }
+
+      if (analysis.candidates.isEmpty) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            const SnackBar(content: Text('No date detected from photo.')),
+          );
+        return;
+      }
+
+      final selected = await _selectDateCandidate(analysis.candidates);
+      if (selected == null || !mounted) {
+        return;
+      }
+
+      setState(() {
+        _queue[index].expirationDate = selected;
+      });
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              'Updated expiry: ${selected.year}-${selected.month.toString().padLeft(2, '0')}-${selected.day.toString().padLeft(2, '0')}',
+            ),
+          ),
+        );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(content: Text('Date scan failed. Try again.')),
+        );
+    }
+  }
+
+  Future<DateTime?> _selectDateCandidate(List<DateTime> candidates) {
+    final visible = candidates.take(6).toList(growable: false);
+    return showModalBottomSheet<DateTime>(
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Pick detected expiry date',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: visible.map((date) {
+                    final label =
+                        '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+                    return ActionChip(
+                      label: Text(label),
+                      onPressed: () => Navigator.of(context).pop(date),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 10),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -219,11 +331,20 @@ class _RapidCaptureScreenState extends State<RapidCaptureScreen> {
                               return ListTile(
                                 title: Text(item.name),
                                 subtitle: Text(
-                                  '${item.barcode} - Qty ${item.quantity}',
+                                  '${item.barcode} - Qty ${item.quantity}\nExp: ${item.expirationDate.year}-${item.expirationDate.month.toString().padLeft(2, '0')}-${item.expirationDate.day.toString().padLeft(2, '0')}',
                                 ),
+                                isThreeLine: true,
                                 trailing: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
+                                    IconButton(
+                                      tooltip: 'Scan expiry photo',
+                                      onPressed: () =>
+                                          _captureExpiryForIndex(index),
+                                      icon: const Icon(
+                                        Icons.document_scanner_outlined,
+                                      ),
+                                    ),
                                     IconButton(
                                       onPressed: item.quantity > 1
                                           ? () => setState(
