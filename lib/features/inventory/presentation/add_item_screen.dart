@@ -1,8 +1,11 @@
 ﻿import 'package:flutter/material.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../data/open_food_facts_client.dart';
 import '../domain/fridge_item.dart';
 import 'barcode_scanner_screen.dart';
+import 'expiry_date_parser.dart';
 
 class AddItemInput {
   AddItemInput({
@@ -42,6 +45,9 @@ class _AddItemScreenState extends State<AddItemScreen> {
   final _barcodeController = TextEditingController();
   final _quantityController = TextEditingController(text: '1');
 
+  final _imagePicker = ImagePicker();
+  final _textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
+
   late final OpenFoodFactsClient _openFoodFactsClient;
 
   DateTime _expirationDate = DateTime.now().add(const Duration(days: 3));
@@ -67,6 +73,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
     _nameController.dispose();
     _barcodeController.dispose();
     _quantityController.dispose();
+    _textRecognizer.close();
     super.dispose();
   }
 
@@ -83,6 +90,46 @@ class _AddItemScreenState extends State<AddItemScreen> {
       setState(() {
         _expirationDate = picked;
       });
+    }
+  }
+
+  Future<void> _scanExpirationDate() async {
+    try {
+      final image = await _imagePicker.pickImage(source: ImageSource.camera);
+      if (image == null || !mounted) {
+        return;
+      }
+
+      final inputImage = InputImage.fromFilePath(image.path);
+      final recognized = await _textRecognizer.processImage(inputImage);
+      final analysis = analyzeExpirationDateText(
+        recognized.text,
+        now: DateTime.now(),
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      if (analysis.candidates.isEmpty) {
+        _showInfo('No valid expiration date detected. Please pick manually.');
+        return;
+      }
+
+      final selected = await _showDateSuggestionSheet(analysis);
+      if (selected == null || !mounted) {
+        return;
+      }
+
+      setState(() {
+        _expirationDate = selected;
+      });
+      _showInfo('Expiration set to ${_formatDate(selected)}');
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      _showInfo('Could not process image for date OCR. Please pick manually.');
     }
   }
 
@@ -130,6 +177,59 @@ class _AddItemScreenState extends State<AddItemScreen> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<DateTime?> _showDateSuggestionSheet(ExpiryDateAnalysis analysis) {
+    return showModalBottomSheet<DateTime>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) {
+        final candidates = analysis.candidates.take(6).toList(growable: false);
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'OCR Date Suggestions',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Detected text:\n${analysis.ocrText.trim().isEmpty ? '(empty)' : analysis.ocrText.trim()}',
+                  maxLines: 4,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 12),
+                if (analysis.suggestedDate != null)
+                  FilledButton(
+                    onPressed: () => Navigator.of(context).pop(analysis.suggestedDate),
+                    child: Text('Use suggested: ${_formatDate(analysis.suggestedDate!)}'),
+                  ),
+                const SizedBox(height: 8),
+                ...candidates.map(
+                  (date) => ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(_formatDate(date)),
+                    onTap: () => Navigator.of(context).pop(date),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
 
   void _submit() {
@@ -227,9 +327,18 @@ class _AddItemScreenState extends State<AddItemScreen> {
                   subtitle: Text(
                     '${_expirationDate.year}-${_expirationDate.month.toString().padLeft(2, '0')}-${_expirationDate.day.toString().padLeft(2, '0')}',
                   ),
-                  trailing: OutlinedButton(
-                    onPressed: _pickDate,
-                    child: const Text('Pick date'),
+                  trailing: Wrap(
+                    spacing: 8,
+                    children: [
+                      OutlinedButton(
+                        onPressed: _scanExpirationDate,
+                        child: const Text('Scan expiry'),
+                      ),
+                      OutlinedButton(
+                        onPressed: _pickDate,
+                        child: const Text('Pick date'),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 24),
