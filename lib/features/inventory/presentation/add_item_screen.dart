@@ -1,7 +1,8 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../data/ai_expiry_date_client.dart';
 import '../data/open_food_facts_client.dart';
 import '../domain/fridge_item.dart';
 import 'barcode_scanner_screen.dart';
@@ -27,10 +28,13 @@ class AddItemScreen extends StatefulWidget {
   const AddItemScreen({
     super.key,
     OpenFoodFactsClient? openFoodFactsClient,
+    AiExpiryDateClient? aiExpiryDateClient,
     this.initialItem,
-  }) : _openFoodFactsClient = openFoodFactsClient;
+  }) : _openFoodFactsClient = openFoodFactsClient,
+       _aiExpiryDateClient = aiExpiryDateClient;
 
   final OpenFoodFactsClient? _openFoodFactsClient;
+  final AiExpiryDateClient? _aiExpiryDateClient;
   final FridgeItem? initialItem;
 
   bool get isEditMode => initialItem != null;
@@ -49,6 +53,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
   final _textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
 
   late final OpenFoodFactsClient _openFoodFactsClient;
+  late final AiExpiryDateClient _aiExpiryDateClient;
 
   DateTime _expirationDate = DateTime.now().add(const Duration(days: 3));
   StorageLocation _location = StorageLocation.fridge;
@@ -57,6 +62,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
   void initState() {
     super.initState();
     _openFoodFactsClient = widget._openFoodFactsClient ?? OpenFoodFactsClient();
+    _aiExpiryDateClient = widget._aiExpiryDateClient ?? AiExpiryDateClient();
 
     final initial = widget.initialItem;
     if (initial != null) {
@@ -102,35 +108,108 @@ class _AddItemScreenState extends State<AddItemScreen> {
 
       final inputImage = InputImage.fromFilePath(image.path);
       final recognized = await _textRecognizer.processImage(inputImage);
-      final analysis = analyzeExpirationDateText(
+      final localAnalysis = analyzeExpirationDateText(
         recognized.text,
         now: DateTime.now(),
       );
+      var aiResult = await _aiExpiryDateClient.suggestDateFromOcrText(
+        recognized.text,
+      );
+
+      if (aiResult.date == null) {
+        final imageBytes = await image.readAsBytes();
+        final imageAiResult = await _aiExpiryDateClient
+            .suggestDateFromImageBytes(imageBytes);
+        if (imageAiResult.date != null ||
+            aiResult.status != AiExpiryDateStatus.found) {
+          aiResult = imageAiResult;
+        }
+      }
+
+      final analysis = _mergeWithAiSuggestion(localAnalysis, aiResult.date);
 
       if (!mounted) {
         return;
       }
 
       if (analysis.candidates.isEmpty) {
-        _showInfo('No valid expiration date detected. Please pick manually.');
+        _showInfo(
+          'No valid expiration date detected. Please pick manually. (${_aiDebugLabelWithSource(aiResult)})',
+        );
         return;
       }
 
       final selected = await _showDateSuggestionSheet(analysis);
       if (selected == null || !mounted) {
+        _showInfo('Date scan canceled. (${_aiDebugLabelWithSource(aiResult)})');
         return;
       }
 
       setState(() {
         _expirationDate = selected;
       });
-      _showInfo('Expiration set to ${_formatDate(selected)}');
+      _showInfo(
+        'Expiration set to ${_formatDate(selected)} (${_aiDebugLabelWithSource(aiResult)})',
+      );
     } catch (_) {
       if (!mounted) {
         return;
       }
       _showInfo('Could not process image for date OCR. Please pick manually.');
     }
+  }
+
+  String _aiDebugLabel(AiExpiryDateStatus status) {
+    switch (status) {
+      case AiExpiryDateStatus.found:
+        return 'AI: used';
+      case AiExpiryDateStatus.noDate:
+        return 'AI: no date';
+      case AiExpiryDateStatus.failed:
+        return 'AI: failed';
+      case AiExpiryDateStatus.disabled:
+        return 'AI: disabled';
+      case AiExpiryDateStatus.emptyInput:
+        return 'AI: empty OCR';
+    }
+  }
+
+  String _aiDebugLabelWithSource(AiExpiryDateResult result) {
+    if (result.status == AiExpiryDateStatus.found &&
+        result.source == AiExpiryDateSource.image) {
+      return 'AI: image used';
+    }
+    if (result.status == AiExpiryDateStatus.found &&
+        result.source == AiExpiryDateSource.text) {
+      return 'AI: text used';
+    }
+    return _aiDebugLabel(result.status);
+  }
+
+  ExpiryDateAnalysis _mergeWithAiSuggestion(
+    ExpiryDateAnalysis local,
+    DateTime? aiDate,
+  ) {
+    if (aiDate == null) {
+      return local;
+    }
+
+    final normalizedAi = DateTime(aiDate.year, aiDate.month, aiDate.day);
+    final candidates = <DateTime>[
+      normalizedAi,
+      ...local.candidates.where(
+        (d) =>
+            !(d.year == normalizedAi.year &&
+                d.month == normalizedAi.month &&
+                d.day == normalizedAi.day),
+      ),
+    ];
+
+    return ExpiryDateAnalysis(
+      ocrText: local.ocrText,
+      candidates: candidates,
+      suggestedDate: normalizedAi,
+    );
   }
 
   Future<void> _scanBarcode() async {
@@ -205,8 +284,11 @@ class _AddItemScreenState extends State<AddItemScreen> {
                 const SizedBox(height: 12),
                 if (analysis.suggestedDate != null)
                   FilledButton(
-                    onPressed: () => Navigator.of(context).pop(analysis.suggestedDate),
-                    child: Text('Use suggested: ${_formatDate(analysis.suggestedDate!)}'),
+                    onPressed: () =>
+                        Navigator.of(context).pop(analysis.suggestedDate),
+                    child: Text(
+                      'Use suggested: ${_formatDate(analysis.suggestedDate!)}',
+                    ),
                   ),
                 const SizedBox(height: 8),
                 ...candidates.map(
@@ -254,9 +336,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.isEditMode ? 'Edit Item' : 'Add Item'),
-      ),
+      appBar: AppBar(title: Text(widget.isEditMode ? 'Edit Item' : 'Add Item')),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomInset),
@@ -346,7 +426,9 @@ class _AddItemScreenState extends State<AddItemScreen> {
                   width: double.infinity,
                   child: FilledButton(
                     onPressed: _submit,
-                    child: Text(widget.isEditMode ? 'Save Changes' : 'Save Item'),
+                    child: Text(
+                      widget.isEditMode ? 'Save Changes' : 'Save Item',
+                    ),
                   ),
                 ),
               ],
