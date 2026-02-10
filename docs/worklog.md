@@ -124,3 +124,32 @@ Use this log for day-to-day progress so history stays easy to query later.
   - Full suite passed.
 - Coverage:
   - 94.67% (426/450).
+
+- Date: 2026-02-10
+- Task: Add local expiration notification feature and settings structure refactor.
+- Result:
+  - Added local notification scheduler and wired reminder sync into inventory lifecycle (load/add/edit/delete/restore).
+  - Added Android notification permission and required desugaring config for `flutter_local_notifications`.
+  - Added notification test helper in Debug Tools and changed it to immediate send for deterministic QA.
+  - Refactored Settings into a hub screen with thematic separation:
+    - Barcode Providers
+    - Debug Tools
+  - Improved provider list UX:
+    - compact rows
+    - aligned explicit drag handles
+    - clearer reorder affordance.
+- Errors:
+  - Android build failed with `checkDebugAarMetadata` desugaring requirement.
+  - Web list update appeared stale due notification scheduler behavior on unsupported platform.
+  - Delayed test notification did not consistently appear when scheduled for ~1 minute.
+- Hardships/Operational Issues:
+  - Platform-specific notification behavior required web-safe guards and deterministic debug flow.
+- Fixes:
+  - Enabled core library desugaring and added `desugar_jdk_libs`.
+  - Disabled scheduler creation on web and made scheduler failures non-blocking for UI updates.
+  - Switched debug notification to immediate send and added permission-aware error feedback.
+- Tests:
+  - Added scheduler helper tests and extended controller tests for reminder sync.
+  - Full and targeted test passes completed during implementation.
+- Coverage:
+  - 88.29% (445/504) at latest full run in this iteration.

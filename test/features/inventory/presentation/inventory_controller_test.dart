@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fridge_saver/features/inventory/data/expiration_notification_scheduler.dart';
 import 'package:fridge_saver/features/inventory/data/inventory_repository.dart';
 import 'package:fridge_saver/features/inventory/domain/fridge_item.dart';
 import 'package:fridge_saver/features/inventory/presentation/inventory_controller.dart';
@@ -19,6 +20,23 @@ class _FakeInventoryRepository implements InventoryRepository {
     saveCalls += 1;
     _storedItems = List<FridgeItem>.from(items);
   }
+}
+
+class _FakeNotificationScheduler implements ExpirationNotificationScheduler {
+  int syncCalls = 0;
+  List<FridgeItem> lastItems = [];
+
+  @override
+  Future<void> initialize() async {}
+
+  @override
+  Future<void> syncItemReminders(List<FridgeItem> items) async {
+    syncCalls += 1;
+    lastItems = List<FridgeItem>.from(items);
+  }
+
+  @override
+  Future<void> sendTestNotification() async {}
 }
 
 void main() {
@@ -43,10 +61,35 @@ void main() {
       expect(controller.visibleItems.length, 1);
     });
 
-    test('adds item and persists it', () async {
-      final repo = _FakeInventoryRepository();
+    test('syncs notifications on load', () async {
+      final item = FridgeItem(
+        id: '1',
+        name: 'Milk',
+        barcode: null,
+        quantity: 1,
+        expirationDate: DateTime(2026, 2, 15),
+        location: StorageLocation.fridge,
+      );
+      final repo = _FakeInventoryRepository(initialItems: [item]);
+      final scheduler = _FakeNotificationScheduler();
       final controller = InventoryController(
         repository: repo,
+        notificationScheduler: scheduler,
+      );
+
+      await controller.load();
+
+      expect(scheduler.syncCalls, 1);
+      expect(scheduler.lastItems.length, 1);
+      expect(scheduler.lastItems.first.id, '1');
+    });
+
+    test('adds item and persists it', () async {
+      final repo = _FakeInventoryRepository();
+      final scheduler = _FakeNotificationScheduler();
+      final controller = InventoryController(
+        repository: repo,
+        notificationScheduler: scheduler,
         now: () => DateTime(2026, 2, 9),
       );
 
@@ -64,6 +107,7 @@ void main() {
       expect(controller.allItems.first.barcode, '599001');
       expect(controller.allItems.first.expirationDate, DateTime(2026, 2, 12));
       expect(repo.saveCalls, 1);
+      expect(scheduler.syncCalls, 2); // one load + one add
     });
 
     test(
@@ -162,6 +206,33 @@ void main() {
       expect(controller.allItems.single.expirationDate, DateTime(2026, 2, 18));
       expect(controller.allItems.single.location, StorageLocation.pantry);
       expect(repo.saveCalls, 1);
+    });
+
+    test('syncs notifications on delete and restore', () async {
+      final repo = _FakeInventoryRepository(
+        initialItems: [
+          FridgeItem(
+            id: '1',
+            name: 'Milk',
+            barcode: null,
+            quantity: 1,
+            expirationDate: DateTime(2026, 2, 15),
+            location: StorageLocation.fridge,
+          ),
+        ],
+      );
+      final scheduler = _FakeNotificationScheduler();
+      final controller = InventoryController(
+        repository: repo,
+        notificationScheduler: scheduler,
+      );
+      await controller.load();
+
+      final deleted = await controller.deleteItem('1');
+      await controller.restoreDeletedItem(deleted!);
+
+      expect(scheduler.syncCalls, 3); // load + delete + restore
+      expect(scheduler.lastItems.single.id, '1');
     });
 
     test(

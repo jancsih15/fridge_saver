@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
+import '../data/expiration_notification_scheduler.dart';
 import '../data/inventory_repository.dart';
 import '../domain/fridge_item.dart';
 
@@ -16,13 +17,16 @@ class DeletedInventoryItem {
 class InventoryController extends ChangeNotifier {
   InventoryController({
     required InventoryRepository repository,
+    ExpirationNotificationScheduler? notificationScheduler,
     NowProvider? now,
     Uuid? uuid,
   }) : _repository = repository,
+       _notificationScheduler = notificationScheduler,
        _now = now ?? DateTime.now,
        _uuid = uuid ?? const Uuid();
 
   final InventoryRepository _repository;
+  final ExpirationNotificationScheduler? _notificationScheduler;
   final NowProvider _now;
   final Uuid _uuid;
 
@@ -45,6 +49,7 @@ class InventoryController extends ChangeNotifier {
     _items
       ..clear()
       ..addAll(await _repository.loadItems());
+    await _syncNotifications();
     notifyListeners();
   }
 
@@ -96,6 +101,7 @@ class InventoryController extends ChangeNotifier {
     }
 
     await _repository.saveItems(_items);
+    await _syncNotifications();
     notifyListeners();
   }
 
@@ -154,6 +160,7 @@ class InventoryController extends ChangeNotifier {
     }
 
     await _repository.saveItems(_items);
+    await _syncNotifications();
     notifyListeners();
   }
 
@@ -166,6 +173,7 @@ class InventoryController extends ChangeNotifier {
     final removed = _items.removeAt(index);
 
     await _repository.saveItems(_items);
+    await _syncNotifications();
     notifyListeners();
     return DeletedInventoryItem(item: removed, index: index);
   }
@@ -184,6 +192,7 @@ class InventoryController extends ChangeNotifier {
 
     _items.insert(targetIndex, deleted.item);
     await _repository.saveItems(_items);
+    await _syncNotifications();
     notifyListeners();
   }
 
@@ -222,5 +231,17 @@ class InventoryController extends ChangeNotifier {
         item.barcode == barcode &&
         item.expirationDate == expirationDate &&
         item.location == location;
+  }
+
+  Future<void> _syncNotifications() async {
+    if (_notificationScheduler == null) {
+      return;
+    }
+    try {
+      await _notificationScheduler.syncItemReminders(_items);
+    } catch (_) {
+      // Notification backends are optional and platform-dependent.
+      // Never block core inventory updates if scheduling fails.
+    }
   }
 }

@@ -28,71 +28,104 @@ class _BarcodeLookupSettingsScreenState
 
     return Scaffold(
       appBar: AppBar(title: const Text('Barcode Providers')),
-      body: !controller.loaded
-          ? const Center(child: CircularProgressIndicator())
-          : Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Enable and reorder free providers. Top providers are used first.',
-                  ),
-                  const SizedBox(height: 12),
-                  Expanded(
-                    child: ReorderableListView.builder(
-                      itemCount: controller.order.length,
-                      onReorder: controller.reorderProvider,
-                      itemBuilder: (context, index) {
-                        final provider = controller.order[index];
-                        return SwitchListTile(
-                          key: ValueKey(provider.id),
-                          title: Text(provider.label),
-                          subtitle: Text(provider.host),
-                          value: controller.isEnabled(provider),
-                          onChanged: (value) =>
-                              controller.toggleProvider(provider, value),
-                        );
-                      },
+      body: SafeArea(
+        bottom: false,
+        child: !controller.loaded
+            ? const Center(child: CircularProgressIndicator())
+            : Padding(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Enable and reorder free providers. Top providers are used first.',
+                    ),
+                    const SizedBox(height: 12),
+                    Expanded(
+                      child: ReorderableListView.builder(
+                        buildDefaultDragHandles: false,
+                        itemCount: controller.order.length,
+                        onReorder: controller.reorderProvider,
+                        itemBuilder: (context, index) {
+                          final provider = controller.order[index];
+                          return ListTile(
+                            key: ValueKey(provider.id),
+                            dense: true,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                            ),
+                            leading: ReorderableDragStartListener(
+                              index: index,
+                              child: const Icon(Icons.drag_indicator, size: 20),
+                            ),
+                            title: Text(provider.label),
+                            subtitle: Text(provider.host, maxLines: 1),
+                            trailing: Switch(
+                              value: controller.isEnabled(provider),
+                              onChanged: (value) =>
+                                  controller.toggleProvider(provider, value),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+      ),
+      bottomNavigationBar: controller.loaded
+          ? SafeArea(
+              top: false,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  border: Border(
+                    top: BorderSide(
+                      color: Theme.of(context).colorScheme.outlineVariant,
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    children: [
-                      OutlinedButton(
-                        onPressed: () async {
-                          await controller.restoreDefaults();
-                          if (!context.mounted) {
-                            return;
-                          }
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Provider defaults restored'),
-                            ),
-                          );
-                        },
-                        child: const Text('Restore defaults'),
-                      ),
-                      OutlinedButton(
-                        onPressed: () async {
-                          await controller.clearCache();
-                          if (!context.mounted) {
-                            return;
-                          }
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Barcode cache cleared'),
-                            ),
-                          );
-                        },
-                        child: const Text('Clear barcode cache'),
-                      ),
-                    ],
-                  ),
-                ],
+                ),
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  alignment: WrapAlignment.center,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: () async {
+                        await controller.restoreDefaults();
+                        if (!context.mounted) {
+                          return;
+                        }
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Provider defaults restored'),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.restore),
+                      label: const Text('Restore defaults'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () async {
+                        await controller.clearCache();
+                        if (!context.mounted) {
+                          return;
+                        }
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Barcode cache cleared'),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.cleaning_services_outlined),
+                      label: const Text('Clear barcode cache'),
+                    ),
+                  ],
+                ),
               ),
-            ),
+            )
+          : null,
     );
   }
 }

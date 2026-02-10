@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../domain/fridge_item.dart';
 import 'add_item_screen.dart';
-import 'barcode_lookup_settings_screen.dart';
+import 'app_settings_screen.dart';
 import 'inventory_controller.dart';
 
 class InventoryScreen extends StatelessWidget {
@@ -19,12 +19,10 @@ class InventoryScreen extends StatelessWidget {
         title: const Text('Fridge Saver'),
         actions: [
           IconButton(
-            tooltip: 'Barcode providers',
+            tooltip: 'Settings',
             icon: const Icon(Icons.settings),
             onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => const BarcodeLookupSettingsScreen(),
-              ),
+              MaterialPageRoute(builder: (_) => const AppSettingsScreen()),
             ),
           ),
         ],
