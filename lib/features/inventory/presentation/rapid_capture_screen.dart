@@ -5,6 +5,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
 
 import '../data/barcode_lookup_models.dart';
+import '../data/rapid_capture_preferences_repository.dart';
 import '../data/barcode_lookup_service.dart';
 import '../domain/fridge_item.dart';
 import 'barcode_value_parser.dart';
@@ -36,6 +37,7 @@ class _RapidDraft {
 
 class _RapidCaptureScreenState extends State<RapidCaptureScreen> {
   late final BarcodeLookupService _lookupService;
+  late final RapidCapturePreferencesRepository _prefsRepository;
   final _textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
   final _imagePicker = ImagePicker();
   final List<_RapidDraft> _queue = [];
@@ -44,17 +46,28 @@ class _RapidCaptureScreenState extends State<RapidCaptureScreen> {
   String? _lastBarcode;
   DateTime? _lastBarcodeAt;
   bool _isSaving = false;
+  StorageLocation _defaultLocation = StorageLocation.fridge;
 
   @override
   void initState() {
     super.initState();
     _lookupService = context.read<BarcodeLookupService>();
+    _prefsRepository = RapidCapturePreferencesRepository();
+    _loadDefaults();
   }
 
   @override
   void dispose() {
     _textRecognizer.close();
     super.dispose();
+  }
+
+  Future<void> _loadDefaults() async {
+    final location = await _prefsRepository.loadLastLocation();
+    if (!mounted) {
+      return;
+    }
+    setState(() => _defaultLocation = location);
   }
 
   Future<void> _onDetect(BarcodeCapture capture) async {
@@ -87,10 +100,11 @@ class _RapidCaptureScreenState extends State<RapidCaptureScreen> {
           name: 'Item $barcode',
           quantity: 1,
           expirationDate: DateTime.now().add(const Duration(days: 3)),
-          location: StorageLocation.fridge,
+          location: _defaultLocation,
         ),
       );
     });
+    _applyRememberedQuantity(index: 0, barcode: barcode);
 
     if (_activeLookups.contains(barcode)) {
       return;
@@ -112,6 +126,22 @@ class _RapidCaptureScreenState extends State<RapidCaptureScreen> {
     });
   }
 
+  Future<void> _applyRememberedQuantity({
+    required int index,
+    required String barcode,
+  }) async {
+    final remembered = await _prefsRepository.loadRememberedQuantity(barcode);
+    if (remembered == null || !mounted || index >= _queue.length) {
+      return;
+    }
+    if (_queue[index].barcode != barcode) {
+      return;
+    }
+    setState(() {
+      _queue[index].quantity = remembered;
+    });
+  }
+
   Future<void> _saveAll() async {
     if (_queue.isEmpty || _isSaving) {
       return;
@@ -127,6 +157,12 @@ class _RapidCaptureScreenState extends State<RapidCaptureScreen> {
         expirationDate: draft.expirationDate,
         location: draft.location,
       );
+      await _prefsRepository.saveRememberedQuantity(
+        draft.barcode,
+        draft.quantity < 1 ? 1 : draft.quantity,
+      );
+      await _prefsRepository.saveLastLocation(draft.location);
+      _defaultLocation = draft.location;
     }
     if (!mounted) {
       return;
@@ -331,12 +367,49 @@ class _RapidCaptureScreenState extends State<RapidCaptureScreen> {
                               return ListTile(
                                 title: Text(item.name),
                                 subtitle: Text(
-                                  '${item.barcode} - Qty ${item.quantity}\nExp: ${item.expirationDate.year}-${item.expirationDate.month.toString().padLeft(2, '0')}-${item.expirationDate.day.toString().padLeft(2, '0')}',
+                                  '${item.barcode} - Qty ${item.quantity} - ${item.location.name}\nExp: ${item.expirationDate.year}-${item.expirationDate.month.toString().padLeft(2, '0')}-${item.expirationDate.day.toString().padLeft(2, '0')}',
                                 ),
                                 isThreeLine: true,
                                 trailing: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
+                                    PopupMenuButton<int>(
+                                      tooltip: 'Quick quantity',
+                                      onSelected: (value) =>
+                                          setState(() => item.quantity = value),
+                                      itemBuilder: (context) => const [
+                                        PopupMenuItem(
+                                          value: 1,
+                                          child: Text('Qty 1'),
+                                        ),
+                                        PopupMenuItem(
+                                          value: 2,
+                                          child: Text('Qty 2'),
+                                        ),
+                                        PopupMenuItem(
+                                          value: 6,
+                                          child: Text('Qty 6'),
+                                        ),
+                                      ],
+                                      icon: const Icon(Icons.flash_on_outlined),
+                                    ),
+                                    PopupMenuButton<StorageLocation>(
+                                      tooltip: 'Change location',
+                                      onSelected: (value) => setState(() {
+                                        item.location = value;
+                                        _defaultLocation = value;
+                                      }),
+                                      itemBuilder: (context) => StorageLocation
+                                          .values
+                                          .map(
+                                            (loc) => PopupMenuItem(
+                                              value: loc,
+                                              child: Text(loc.name),
+                                            ),
+                                          )
+                                          .toList(growable: false),
+                                      icon: const Icon(Icons.kitchen_outlined),
+                                    ),
                                     IconButton(
                                       tooltip: 'Scan expiry photo',
                                       onPressed: () =>
