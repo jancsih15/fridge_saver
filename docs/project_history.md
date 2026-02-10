@@ -1,4 +1,4 @@
-﻿# Project History
+# Project History
 
 Last updated: 2026-02-10
 
@@ -11,111 +11,41 @@ Last updated: 2026-02-10
 - `c60adc0` - Add edit/delete item flows and strengthen controller tests
 - `79a26d1` - Add high-value repository/model coverage tests
 - `0c2e043` - Add undo support for swipe delete with snackbar action
+- `18aee0a` - Docs archive/log foundation
+- `3395d5a` - OCR-assisted expiry suggestion flow
+- `fa748bb` - AI expiry fallback + debug statuses
+- `23a0b63` - Exact duplicate batch merge on add/edit
 
-## Task Log (Major Milestones)
-1. Environment setup
-- Actions:
-  - Installed Flutter SDK and Android tooling on Windows
-  - Configured JAVA_HOME/JDK for Gradle builds
-  - Set up wireless Android debugging path
-- Common errors and fixes:
-  - `CreateFile failed 5` / sandbox restrictions: reran with elevated permissions
-  - `JAVA_HOME is not set`: configured Android Studio JBR
-  - `adb not recognized`: added platform-tools to PATH
+## Major Milestones
+1. Core offline inventory shipped (CRUD + expiring-soon + Hive persistence).
+2. Barcode scan shipped and stabilized for Android camera permission behavior.
+3. Open Food Facts product-name autofill added.
+4. Edit/delete/undo usability completed.
+5. Coverage hardening added for controller/repository/model/API logic.
+6. OCR expiry recognition added with heuristic parser + candidate confirmation.
+7. Optional AI expiry extraction added (text and image fallback).
+8. Duplicate batch merge behavior implemented for realistic inventory handling.
+9. Multi-provider free barcode lookup fallback + cache + settings UI implemented.
 
-2. MVP inventory foundation
-- Actions:
-  - Added model, controller, repository, list/add views
-  - Wired Hive persistence
-- Result:
-  - Offline item CRUD started with add + list + expiring filter
+## Recent Error/Fix Register
+- `MissingPluginException` after plugin changes
+  - Fix: full restart (`flutter clean && flutter pub get && flutter run`)
 
-3. UX stabilization
-- Issue:
-  - Add-item keyboard overflow on mobile
-- Fix:
-  - Scrollable, keyboard-safe form layout
+- Scanner captured QR website links as barcode values
+  - Cause: parser accepted any non-empty string.
+  - Fix: restricted scanner parser to numeric barcode-like values (8-14 digits).
 
-4. Barcode feature
-- Actions:
-  - Added scanner screen and barcode parser utility
-  - Barcode field scan button integration
-- Issue:
-  - Scanner opened without camera permission behavior on Android
-- Fix:
-  - Added `android.permission.CAMERA` in manifest
-  - Added scanner error UI and visible frame overlay
-
-5. Open Food Facts integration
-- Actions:
-  - Barcode-based product lookup and name autofill
-  - Added user feedback messages
-- Issue:
-  - Missing products reported as failure in some cases
-- Fix:
-  - Treated HTTP 404 as `notFound`, kept server/network as `failed`
-
-6. Editing, deletion, undo
-- Actions:
-  - Added edit flow (prefilled form)
-  - Added swipe-delete and undo window via snackbar
-- Result:
-  - Core day-to-day usability significantly improved
-
-7. Test hardening and coverage push
-- Actions:
-  - Added repository tests against real `HiveInventoryRepository`
-  - Added model serialization tests (`FridgeItem`)
-  - Expanded API edge-case tests
-  - Added controller branch tests
-- Result:
-  - Reached and validated very high coverage baseline
-
-8. OCR expiry-date experiment (in progress, uncommitted)
-- Actions:
-  - Added ML Kit OCR + image capture flow for expiry date suggestion
-  - Added parser with multiple date formats and keyword-based ranking
-  - Added candidate confirmation sheet in UI
-  - Added real-world OCR sample tests (Mizse/Wippy/text examples)
-- Current status:
-  - Tests passing with coverage 97.92% in current working tree
-  - Pending commit
-
-## Error/Fix Register (Condensed)
-- `MissingPluginException` after adding native plugin
-  - Cause: app not fully rebuilt
-  - Fix: `flutter clean && flutter pub get && flutter run`
-
-- OCR parsed wrong date from noisy image
-  - Cause: OCR quality/noise + parser heuristics
-  - Fixes applied:
-    - comma separator support
-    - keyword-aware ranking
-    - user confirmation step for suggested date
-
-- Far-future year not accepted
-  - Cause: parser horizon cap too short (+5y)
-  - Fix: increased to +30y with tests
-
-## Operational Issues (Non-App)
-- PATH inconsistency across shells
-  - Symptoms: `flutter` and `adb` intermittently not recognized.
-  - Mitigation: keep SDK paths documented and verify with new terminal session.
-
-- Terminal/session restarts during setup
-  - Symptoms: command context and environment assumptions lost.
-  - Mitigation: re-run quick diagnostics (`where flutter`, `flutter doctor`, `adb devices`) after restart.
-
-- Codex permission prompt freeze/stuck approval flow
-  - Symptoms: long-running task appears blocked even after user response.
-  - Mitigation: stop the run, resume in a fresh command, and keep work checkpoints in docs.
+- Products previously found later returning not found after provider/caching changes
+  - Cause: cached `notFound` entries blocked fresh provider lookup.
+  - Fix: ignore cached `notFound` and cache only successful `found` responses.
 
 ## Coverage Snapshots
-- Earlier stabilized baseline: 100% (131/131)
-- With OCR parser module added: 97.92% (188/192)
-  - Remaining misses are defensive/default branches in expiry parser
+- Earlier baseline after hardening: 100% (131/131)
+- OCR/AI expansion phase: ~97-98%
+- Current (after provider fallback + cache + bugfixes): 94.67% (426/450)
 
-## Notes for Future Sessions
-- Keep this file + `docs/project_state.md` updated after each major feature.
-- Record coverage number after every significant test run.
-- When context is reset, resume from these docs first.
+## Operational Notes
+- PATH/JAVA/ADB setup can drift across terminal restarts.
+- Permission prompt freezes can occur; restart run and continue from docs/worklog.
+- Use targeted tests during iteration; full coverage run before commit/push.
+

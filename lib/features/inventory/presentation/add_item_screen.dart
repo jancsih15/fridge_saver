@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
 
 import '../data/ai_expiry_date_client.dart';
-import '../data/open_food_facts_client.dart';
+import '../data/barcode_lookup_models.dart';
+import '../data/barcode_lookup_service.dart';
 import '../domain/fridge_item.dart';
 import 'barcode_scanner_screen.dart';
 import 'expiry_date_parser.dart';
@@ -34,13 +36,13 @@ class _DateSuggestionSheetResult {
 class AddItemScreen extends StatefulWidget {
   const AddItemScreen({
     super.key,
-    OpenFoodFactsClient? openFoodFactsClient,
+    BarcodeLookupService? barcodeLookupService,
     AiExpiryDateClient? aiExpiryDateClient,
     this.initialItem,
-  }) : _openFoodFactsClient = openFoodFactsClient,
+  }) : _barcodeLookupService = barcodeLookupService,
        _aiExpiryDateClient = aiExpiryDateClient;
 
-  final OpenFoodFactsClient? _openFoodFactsClient;
+  final BarcodeLookupService? _barcodeLookupService;
   final AiExpiryDateClient? _aiExpiryDateClient;
   final FridgeItem? initialItem;
 
@@ -59,7 +61,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
   final _imagePicker = ImagePicker();
   final _textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
 
-  late final OpenFoodFactsClient _openFoodFactsClient;
+  late final BarcodeLookupService _barcodeLookupService;
   late final AiExpiryDateClient _aiExpiryDateClient;
 
   DateTime _expirationDate = DateTime.now().add(const Duration(days: 3));
@@ -68,7 +70,8 @@ class _AddItemScreenState extends State<AddItemScreen> {
   @override
   void initState() {
     super.initState();
-    _openFoodFactsClient = widget._openFoodFactsClient ?? OpenFoodFactsClient();
+    _barcodeLookupService =
+        widget._barcodeLookupService ?? context.read<BarcodeLookupService>();
     _aiExpiryDateClient = widget._aiExpiryDateClient ?? AiExpiryDateClient();
 
     final initial = widget.initialItem;
@@ -278,23 +281,27 @@ class _AddItemScreenState extends State<AddItemScreen> {
       return;
     }
 
-    final lookup = await _openFoodFactsClient.lookupProduct(result);
+    final lookup = await _barcodeLookupService.lookupProduct(result);
     if (!mounted) {
       return;
     }
 
     switch (lookup.status) {
-      case OpenFoodFactsLookupStatus.found:
+      case BarcodeLookupStatus.found:
         setState(() {
           _nameController.text = lookup.productName!;
         });
-        _showInfo('Product found: ${lookup.productName}');
+        final providerLabel = lookup.provider?.label ?? 'Provider';
+        final cacheLabel = lookup.fromCache ? ' (cache)' : '';
+        _showInfo(
+          'Product found via $providerLabel$cacheLabel: ${lookup.productName}',
+        );
         break;
-      case OpenFoodFactsLookupStatus.notFound:
+      case BarcodeLookupStatus.notFound:
         _showInfo('No product found for this barcode.');
         break;
-      case OpenFoodFactsLookupStatus.failed:
-        _showInfo('Lookup failed. You can enter the product name manually.');
+      case BarcodeLookupStatus.failed:
+        _showInfo('All barcode providers failed. Enter product name manually.');
         break;
     }
   }

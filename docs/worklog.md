@@ -63,3 +63,64 @@ Use this log for day-to-day progress so history stays easy to query later.
 - User Test Outcomes:
   - Wippy item: AI returned correct date and reported AI usage.
   - Water bottle: OCR remained hard, but AI image fallback succeeded (`AI: image used`).
+
+- Date: 2026-02-10
+- Task: Improve duplicate handling for item add/edit while preserving batch-by-expiry use case.
+- Result:
+  - Implemented exact-duplicate merge (same name + barcode + date + location).
+  - Editing one item into another exact duplicate now merges quantity instead of keeping two rows.
+  - Different expiration dates remain separate rows to support multiple batches.
+- Errors:
+  - User-observed confusion where edit could appear to create duplicate rows.
+- Hardships/Operational Issues:
+  - Behavior ambiguity between true duplicates and intentional same-product multi-batch entries.
+- Fixes:
+  - Added controller merge logic for add/update operations.
+  - Added targeted unit tests for merge and non-merge cases.
+- Tests:
+  - Full suite passed after implementation.
+- Coverage:
+  - 97.54% (278/285) at validation time.
+
+- Date: 2026-02-10
+- Task: Add free barcode provider fallbacks with configurable order/enabled state and local lookup cache.
+- Result:
+  - Introduced multi-provider barcode lookup pipeline (all free, no API key required):
+    - Open Food Facts
+    - Open Beauty Facts
+    - Open Products Facts
+    - Open Pet Food Facts
+  - Added lookup settings persistence (enable/disable + provider order).
+  - Added local barcode cache for found and not-found results.
+  - Added settings UI to reorder/toggle providers and clear barcode cache.
+  - Wired `AddItemScreen` barcode name lookup to new service.
+- Errors:
+  - Prior run was interrupted mid-implementation; resumed and verified state before continuing.
+- Hardships/Operational Issues:
+  - Coverage dipped after adding new modules; added targeted tests to restore quality baseline.
+- Fixes:
+  - Added dedicated tests for cache, provider client, models, and service fallback/caching behavior.
+- Tests:
+  - Full suite passed.
+- Coverage:
+  - 95.08% (425/447).
+
+- Date: 2026-02-10
+- Task: Fix barcode scanner URL capture and stale not-found cache behavior.
+- Result:
+  - Scanner now accepts only numeric product barcode candidates (EAN/UPC/GTIN-like).
+  - Barcode lookup service no longer treats cached `notFound` as authoritative.
+  - Service now caches only successful `found` lookups for stability.
+- Errors:
+  - Scanner sometimes returned website links from QR codes instead of product barcode.
+  - Previously found products could fail later due stale cached not-found entries.
+- Hardships/Operational Issues:
+  - Regression surfaced only after integrating provider fallback + cache.
+- Fixes:
+  - Tightened barcode parser validation.
+  - Updated lookup cache policy and service logic.
+  - Added regression tests for both issues.
+- Tests:
+  - Full suite passed.
+- Coverage:
+  - 94.67% (426/450).

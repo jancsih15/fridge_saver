@@ -1,83 +1,83 @@
-﻿# Project State (Context Archive)
+# Project State (Context Archive)
 
 Last updated: 2026-02-10
 
 ## Product Goal
-Mobile MVP to reduce food waste by tracking items and expiration dates, with fast UX and offline-first behavior.
+Android-first MVP that reduces food waste by tracking items and expiration dates with fast, offline-first UX.
 
 ## Stack
 - Flutter (Android-first)
 - State: Provider + ChangeNotifier
-- Local persistence: Hive
-- Barcode scan: mobile_scanner
-- Product lookup: Open Food Facts API (`http`)
-- OCR expiry experiment: image_picker + google_mlkit_text_recognition (in progress, not yet committed)
+- Local storage: Hive (`fridge_items`, `app_settings`)
+- Barcode scan: `mobile_scanner`
+- Expiry OCR: `google_mlkit_text_recognition` + `image_picker`
+- Optional AI assist: OpenAI Responses API (via `--dart-define=OPENAI_API_KEY=...`)
+- Barcode lookup: free Open Facts provider fallback chain + local cache
 
 ## Current Architecture
-- `lib/features/inventory/domain/fridge_item.dart`
-- `lib/features/inventory/data/inventory_repository.dart` (Hive repo)
-- `lib/features/inventory/data/open_food_facts_client.dart`
-- `lib/features/inventory/presentation/inventory_controller.dart`
-- `lib/features/inventory/presentation/inventory_screen.dart`
-- `lib/features/inventory/presentation/add_item_screen.dart`
-- `lib/features/inventory/presentation/barcode_scanner_screen.dart`
-- `lib/features/inventory/presentation/barcode_value_parser.dart`
-- `lib/features/inventory/presentation/expiry_date_parser.dart` (new, in progress)
+- Domain:
+  - `lib/features/inventory/domain/fridge_item.dart`
+- Data:
+  - `lib/features/inventory/data/inventory_repository.dart`
+  - `lib/features/inventory/data/ai_expiry_date_client.dart`
+  - `lib/features/inventory/data/barcode_lookup_models.dart`
+  - `lib/features/inventory/data/barcode_lookup_provider_client.dart`
+  - `lib/features/inventory/data/barcode_lookup_service.dart`
+  - `lib/features/inventory/data/barcode_lookup_settings_repository.dart`
+  - `lib/features/inventory/data/barcode_lookup_cache_repository.dart`
+- Presentation:
+  - `lib/features/inventory/presentation/inventory_controller.dart`
+  - `lib/features/inventory/presentation/inventory_screen.dart`
+  - `lib/features/inventory/presentation/add_item_screen.dart`
+  - `lib/features/inventory/presentation/barcode_scanner_screen.dart`
+  - `lib/features/inventory/presentation/barcode_value_parser.dart`
+  - `lib/features/inventory/presentation/expiry_date_parser.dart`
+  - `lib/features/inventory/presentation/barcode_lookup_settings_controller.dart`
+  - `lib/features/inventory/presentation/barcode_lookup_settings_screen.dart`
 
 ## Implemented Features
-- Add fridge items (name, optional barcode, qty, date, location)
-- Edit existing items
-- Delete with swipe gesture
-- Undo delete via snackbar action + restore logic
-- Expiring-soon filter (within 3 days)
-- Barcode scan flow
-- Open Food Facts lookup + user feedback states
-- Local persistence (Hive)
+- Inventory CRUD (add/edit/delete) with undo delete.
+- Expiring-soon filter (within 3 days).
+- Duplicate merge logic:
+  - Exact duplicate batch (same name+barcode+date+location) merges quantity.
+  - Different expiry dates remain separate rows.
+- Barcode scan flow with overlay and camera error UI.
+- Multi-provider barcode name lookup (free providers) with configurable order/enabled state.
+- Barcode lookup cache and settings screen (reorder/toggle/clear cache).
+- Expiry date entry:
+  - manual date picker,
+  - OCR suggestions,
+  - optional user-triggered AI fallback (text then image).
 
-## Testing & Quality
-- Unit tests: controller, parser(s), Open Food Facts client, model serialization, real Hive repo implementation
-- Latest run: `flutter test --coverage` passed
-- Coverage: 97.92% (188/192) with current uncommitted OCR changes
-- Remaining uncovered lines: defensive/default branches in `lib/features/inventory/presentation/expiry_date_parser.dart`
-
-## Current In-Progress (Uncommitted)
-- OCR-assisted expiry date suggestions in `AddItemScreen`
-- `expiry_date_parser` with:
-  - comma/dot/slash/hyphen separators
-  - keyword-aware scoring (`EXP`, `best before`, Hungarian variants)
-  - candidate list + explicit user confirmation sheet
-  - 30-year future horizon
-- Tests with OCR-like sample strings (Mizse/Wippy examples)
+## Quality Snapshot
+- Latest test run: full suite passed.
+- Latest coverage: 94.67% (426/450).
+- Largest remaining misses are in newly added lookup/settings modules and parser edge branches.
 
 ## Known Environment Notes
 - Flutter SDK path: `C:\dev\flutter`
 - Android SDK path: `C:\Users\Admin\AppData\Local\Android\Sdk`
-- JAVA_HOME set to Android Studio JBR
-- Some generated plugin registrant files can change when dependencies change:
-  - `linux/flutter/generated_plugin_registrant.cc`
-  - `linux/flutter/generated_plugins.cmake`
-  - `windows/flutter/generated_plugin_registrant.cc`
-  - `windows/flutter/generated_plugins.cmake`
-  - `macos/Flutter/GeneratedPluginRegistrant.swift`
+- `JAVA_HOME` uses Android Studio JBR.
+- Run with AI enabled:
+  - `flutter run -d <device_id> --dart-define=OPENAI_API_KEY=$env:OPENAI_API_KEY`
 
 ## Runbook
-- Run app on Android device:
+- Run app:
   - `flutter run -d <device_id>`
-- Full rebuild after plugin changes:
+- Full rebuild (if plugins/config seem stale):
   - `flutter clean`
   - `flutter pub get`
   - `flutter run -d <device_id>`
-- Test + coverage:
+- Tests + coverage:
   - `flutter test --coverage`
 
 ## Next Recommended Work
-1. Commit current OCR expiry feature changes.
-2. Add widget/integration test for OCR suggestion flow (mocking analysis layer).
-3. Add local notifications for upcoming expiration.
-4. Add data export/import backup.
+1. Local expiration notifications (core value for waste reduction).
+2. Add tests for barcode settings controller/repository edge cases.
+3. Optional cache TTL policy for found entries (if provider data freshness becomes an issue).
 
 ## Session Bootstrap
-When a new session starts:
-1. Read `docs/project_state.md` first for current architecture and in-progress work.
-2. Read `docs/project_history.md` for timeline and previous fixes.
-3. Append new entries to `docs/worklog.md` for each task delivered.
+1. Read `docs/project_state.md`.
+2. Read `docs/project_history.md`.
+3. Continue appending `docs/worklog.md` per delivered task.
+

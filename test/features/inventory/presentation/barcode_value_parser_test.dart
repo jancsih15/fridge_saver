@@ -3,13 +3,24 @@ import 'package:fridge_saver/features/inventory/presentation/barcode_value_parse
 
 void main() {
   group('pickFirstBarcodeValue', () {
-    test('returns first non-empty trimmed value', () {
-      final value = pickFirstBarcodeValue(['', '   ', '  599123  ', '999']);
-      expect(value, '599123');
+    test('returns first numeric EAN/UPC candidate', () {
+      final value = pickFirstBarcodeValue([
+        '',
+        '   ',
+        'https://example.com/product/123',
+        '5991234567890',
+      ]);
+      expect(value, '5991234567890');
     });
 
-    test('returns null when no valid values exist', () {
-      final value = pickFirstBarcodeValue([null, '', '   ']);
+    test('returns null when only non-product values exist', () {
+      final value = pickFirstBarcodeValue([
+        null,
+        '',
+        '   ',
+        'https://example.com',
+        'not-a-barcode',
+      ]);
       expect(value, isNull);
     });
   });

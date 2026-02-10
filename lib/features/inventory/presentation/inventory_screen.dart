@@ -1,9 +1,10 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../domain/fridge_item.dart';
 import 'add_item_screen.dart';
+import 'barcode_lookup_settings_screen.dart';
 import 'inventory_controller.dart';
 
 class InventoryScreen extends StatelessWidget {
@@ -14,7 +15,20 @@ class InventoryScreen extends StatelessWidget {
     final controller = context.watch<InventoryController>();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Fridge Saver')),
+      appBar: AppBar(
+        title: const Text('Fridge Saver'),
+        actions: [
+          IconButton(
+            tooltip: 'Barcode providers',
+            icon: const Icon(Icons.settings),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const BarcodeLookupSettingsScreen(),
+              ),
+            ),
+          ),
+        ],
+      ),
       body: Column(
         children: [
           SwitchListTile(
@@ -24,7 +38,9 @@ class InventoryScreen extends StatelessWidget {
           ),
           Expanded(
             child: controller.visibleItems.isEmpty
-                ? const Center(child: Text('No items yet. Add your first item.'))
+                ? const Center(
+                    child: Text('No items yet. Add your first item.'),
+                  )
                 : ListView.separated(
                     itemCount: controller.visibleItems.length,
                     separatorBuilder: (_, __) => const Divider(height: 1),
@@ -100,12 +116,12 @@ class InventoryScreen extends StatelessWidget {
     }
 
     await context.read<InventoryController>().addItem(
-          name: input.name,
-          barcode: input.barcode,
-          quantity: input.quantity,
-          expirationDate: input.expirationDate,
-          location: input.location,
-        );
+      name: input.name,
+      barcode: input.barcode,
+      quantity: input.quantity,
+      expirationDate: input.expirationDate,
+      location: input.location,
+    );
   }
 
   Future<void> _openEditItem(BuildContext context, FridgeItem item) async {
@@ -118,12 +134,12 @@ class InventoryScreen extends StatelessWidget {
     }
 
     await context.read<InventoryController>().updateItem(
-          id: item.id,
-          name: input.name,
-          barcode: input.barcode,
-          quantity: input.quantity,
-          expirationDate: input.expirationDate,
-          location: input.location,
-        );
+      id: item.id,
+      name: input.name,
+      barcode: input.barcode,
+      quantity: input.quantity,
+      expirationDate: input.expirationDate,
+      location: input.location,
+    );
   }
 }
