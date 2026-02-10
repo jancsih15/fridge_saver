@@ -31,31 +31,132 @@ class InventoryScreen extends StatelessWidget {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                crossAxisAlignment: WrapCrossAlignment.center,
+            padding: const EdgeInsets.fromLTRB(10, 6, 10, 4),
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Filter:'),
-                  ...const [
-                    (label: 'All', value: null),
-                    (label: 'Today', value: 0),
-                    (label: '1 day', value: 1),
-                    (label: '3 days', value: 3),
-                    (label: '7 days', value: 7),
-                  ].map(
-                    (option) => ChoiceChip(
-                      label: Text(option.label),
-                      selected: controller.expiringWithinDays == option.value,
-                      onSelected: (_) {
-                        context
-                            .read<InventoryController>()
-                            .setExpiringWithinDays(option.value);
-                      },
-                    ),
+                  Row(
+                    children: [
+                      const Text('Expiry'),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              ...const [
+                                (label: 'All', value: null),
+                                (label: 'Today', value: 0),
+                                (label: '1d', value: 1),
+                                (label: '3d', value: 3),
+                                (label: '7d', value: 7),
+                              ].map(
+                                (option) => Padding(
+                                  padding: const EdgeInsets.only(right: 6),
+                                  child: ChoiceChip(
+                                    label: Text(option.label),
+                                    selected:
+                                        controller.expiringWithinDays ==
+                                        option.value,
+                                    onSelected: (_) {
+                                      context
+                                          .read<InventoryController>()
+                                          .setExpiringWithinDays(option.value);
+                                    },
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      DropdownButtonHideUnderline(
+                        child: DropdownButton<InventorySortBy>(
+                          value: controller.sortBy,
+                          isDense: true,
+                          items: const [
+                            DropdownMenuItem(
+                              value: InventorySortBy.expirationSoonest,
+                              child: Text('Soonest'),
+                            ),
+                            DropdownMenuItem(
+                              value: InventorySortBy.expirationLatest,
+                              child: Text('Latest'),
+                            ),
+                            DropdownMenuItem(
+                              value: InventorySortBy.nameAZ,
+                              child: Text('Name A-Z'),
+                            ),
+                            DropdownMenuItem(
+                              value: InventorySortBy.nameZA,
+                              child: Text('Name Z-A'),
+                            ),
+                          ],
+                          onChanged: (value) {
+                            if (value != null) {
+                              context.read<InventoryController>().setSortBy(
+                                value,
+                              );
+                            }
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      const Text('Location'),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              ...const [
+                                (label: 'All', value: null),
+                                (
+                                  label: 'Fridge',
+                                  value: StorageLocation.fridge,
+                                ),
+                                (
+                                  label: 'Freezer',
+                                  value: StorageLocation.freezer,
+                                ),
+                                (
+                                  label: 'Pantry',
+                                  value: StorageLocation.pantry,
+                                ),
+                              ].map(
+                                (option) => Padding(
+                                  padding: const EdgeInsets.only(right: 6),
+                                  child: ChoiceChip(
+                                    label: Text(option.label),
+                                    selected:
+                                        controller.locationFilter ==
+                                        option.value,
+                                    onSelected: (_) {
+                                      context
+                                          .read<InventoryController>()
+                                          .setLocationFilter(option.value);
+                                    },
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),

@@ -382,16 +382,25 @@ class _AddItemScreenState extends State<AddItemScreen> {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) {
       return;
+    }
+
+    final cleanBarcode = _barcodeController.text.trim();
+    final cleanName = _nameController.text.trim();
+    if (cleanBarcode.isNotEmpty && cleanName.isNotEmpty) {
+      await _barcodeLookupService.rememberNameForBarcode(
+        barcode: cleanBarcode,
+        productName: cleanName,
+      );
     }
 
     final quantity = int.parse(_quantityController.text);
     Navigator.of(context).pop(
       AddItemInput(
-        name: _nameController.text,
-        barcode: _barcodeController.text,
+        name: cleanName,
+        barcode: cleanBarcode,
         quantity: quantity,
         expirationDate: _expirationDate,
         location: _location,

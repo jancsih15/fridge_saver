@@ -8,6 +8,8 @@ import '../domain/fridge_item.dart';
 
 typedef NowProvider = DateTime Function();
 
+enum InventorySortBy { expirationSoonest, expirationLatest, nameAZ, nameZA }
+
 class DeletedInventoryItem {
   DeletedInventoryItem({required this.item, required this.index});
 
@@ -36,18 +38,28 @@ class InventoryController extends ChangeNotifier {
 
   final List<FridgeItem> _items = [];
   int? _expiringWithinDays;
+  StorageLocation? _locationFilter;
+  InventorySortBy _sortBy = InventorySortBy.expirationSoonest;
 
   List<FridgeItem> get allItems => List.unmodifiable(_items);
   int? get expiringWithinDays => _expiringWithinDays;
+  StorageLocation? get locationFilter => _locationFilter;
+  InventorySortBy get sortBy => _sortBy;
 
   List<FridgeItem> get visibleItems {
-    final source = _expiringWithinDays != null
-        ? _items
-              .where((item) => _isExpiringWithin(item, _expiringWithinDays!))
-              .toList(growable: false)
-        : _items;
+    var source = List<FridgeItem>.from(_items, growable: false);
+    if (_expiringWithinDays != null) {
+      source = source
+          .where((item) => _isExpiringWithin(item, _expiringWithinDays!))
+          .toList(growable: false);
+    }
+    if (_locationFilter != null) {
+      source = source
+          .where((item) => item.location == _locationFilter)
+          .toList(growable: false);
+    }
     final sorted = List<FridgeItem>.from(source);
-    sorted.sort((a, b) => a.expirationDate.compareTo(b.expirationDate));
+    sorted.sort(_compareByCurrentSort);
     return sorted;
   }
 
@@ -209,11 +221,34 @@ class InventoryController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setLocationFilter(StorageLocation? location) {
+    _locationFilter = location;
+    notifyListeners();
+  }
+
+  void setSortBy(InventorySortBy sortBy) {
+    _sortBy = sortBy;
+    notifyListeners();
+  }
+
   bool _isExpiringWithin(FridgeItem item, int days) {
     final now = _now();
     final today = DateTime(now.year, now.month, now.day);
     final diffDays = item.expirationDate.difference(today).inDays;
     return diffDays >= 0 && diffDays <= days;
+  }
+
+  int _compareByCurrentSort(FridgeItem a, FridgeItem b) {
+    switch (_sortBy) {
+      case InventorySortBy.expirationSoonest:
+        return a.expirationDate.compareTo(b.expirationDate);
+      case InventorySortBy.expirationLatest:
+        return b.expirationDate.compareTo(a.expirationDate);
+      case InventorySortBy.nameAZ:
+        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      case InventorySortBy.nameZA:
+        return b.name.toLowerCase().compareTo(a.name.toLowerCase());
+    }
   }
 
   String? _normalizeBarcode(String? barcode) {

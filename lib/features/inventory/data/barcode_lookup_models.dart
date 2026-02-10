@@ -54,7 +54,7 @@ class BarcodeLookupResult {
 
   factory BarcodeLookupResult.found({
     required String productName,
-    required BarcodeLookupProvider provider,
+    BarcodeLookupProvider? provider,
     bool fromCache = false,
   }) {
     return BarcodeLookupResult._(

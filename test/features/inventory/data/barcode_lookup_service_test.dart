@@ -114,6 +114,32 @@ void main() {
       expect(callCount, 0);
     });
 
+    test('returns manual remembered name without network call', () async {
+      var callCount = 0;
+      final service = BarcodeLookupService(
+        settingsRepository: settingsRepo,
+        cacheRepository: cacheRepo,
+        providerClient: BarcodeLookupProviderClient(
+          httpClient: MockClient((_) async {
+            callCount += 1;
+            return http.Response('{"status":0}', 200);
+          }),
+        ),
+      );
+
+      await service.rememberNameForBarcode(
+        barcode: '444',
+        productName: 'My Manual Product',
+      );
+
+      final result = await service.lookupProduct('444');
+      expect(result.status, BarcodeLookupStatus.found);
+      expect(result.productName, 'My Manual Product');
+      expect(result.fromCache, isTrue);
+      expect(result.provider, isNull);
+      expect(callCount, 0);
+    });
+
     test('ignores stale cached notFound and still queries providers', () async {
       await cacheRepo.putNotFound(barcode: '321');
       await settingsRepo.saveSettings(

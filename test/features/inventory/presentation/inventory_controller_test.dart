@@ -489,5 +489,66 @@ void main() {
       expect(controller.expiringWithinDays, 7);
       expect(filterRepo.savedValue, 7);
     });
+
+    test('filters visible items by selected location', () async {
+      final repo = _FakeInventoryRepository(
+        initialItems: [
+          FridgeItem(
+            id: '1',
+            name: 'Milk',
+            barcode: null,
+            quantity: 1,
+            expirationDate: DateTime(2026, 2, 12),
+            location: StorageLocation.fridge,
+          ),
+          FridgeItem(
+            id: '2',
+            name: 'Ice Cream',
+            barcode: null,
+            quantity: 1,
+            expirationDate: DateTime(2026, 2, 12),
+            location: StorageLocation.freezer,
+          ),
+        ],
+      );
+      final controller = InventoryController(repository: repo);
+      await controller.load();
+
+      controller.setLocationFilter(StorageLocation.freezer);
+
+      expect(controller.visibleItems.length, 1);
+      expect(controller.visibleItems.single.name, 'Ice Cream');
+    });
+
+    test('sorts by selected sort mode', () async {
+      final repo = _FakeInventoryRepository(
+        initialItems: [
+          FridgeItem(
+            id: '1',
+            name: 'Banana',
+            barcode: null,
+            quantity: 1,
+            expirationDate: DateTime(2026, 2, 10),
+            location: StorageLocation.fridge,
+          ),
+          FridgeItem(
+            id: '2',
+            name: 'Apple',
+            barcode: null,
+            quantity: 1,
+            expirationDate: DateTime(2026, 2, 11),
+            location: StorageLocation.fridge,
+          ),
+        ],
+      );
+      final controller = InventoryController(repository: repo);
+      await controller.load();
+
+      controller.setSortBy(InventorySortBy.nameAZ);
+      expect(controller.visibleItems.map((e) => e.name), ['Apple', 'Banana']);
+
+      controller.setSortBy(InventorySortBy.expirationLatest);
+      expect(controller.visibleItems.map((e) => e.id), ['2', '1']);
+    });
   });
 }

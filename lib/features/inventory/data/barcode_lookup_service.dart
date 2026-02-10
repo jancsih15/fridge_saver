@@ -22,6 +22,14 @@ class BarcodeLookupService {
       return BarcodeLookupResult.notFound();
     }
 
+    final manualName = _cacheRepository.getManualName(cleanBarcode);
+    if (manualName != null) {
+      return BarcodeLookupResult.found(
+        productName: manualName,
+        fromCache: true,
+      );
+    }
+
     final cached = _cacheRepository.get(cleanBarcode);
     if (cached != null && cached.status == BarcodeLookupStatus.found) {
       return _fromCacheEntry(cached);
@@ -67,12 +75,12 @@ class BarcodeLookupService {
   BarcodeLookupResult _fromCacheEntry(BarcodeLookupCacheEntry entry) {
     switch (entry.status) {
       case BarcodeLookupStatus.found:
-        if (entry.productName == null || entry.provider == null) {
+        if (entry.productName == null) {
           return BarcodeLookupResult.failed();
         }
         return BarcodeLookupResult.found(
           productName: entry.productName!,
-          provider: entry.provider!,
+          provider: entry.provider,
           fromCache: true,
         );
       case BarcodeLookupStatus.notFound:
@@ -80,5 +88,25 @@ class BarcodeLookupService {
       case BarcodeLookupStatus.failed:
         return BarcodeLookupResult.failed();
     }
+  }
+
+  Future<void> rememberNameForBarcode({
+    required String barcode,
+    required String productName,
+  }) async {
+    final cleanBarcode = barcode.trim();
+    final cleanName = productName.trim();
+    if (cleanBarcode.isEmpty || cleanName.isEmpty) {
+      return;
+    }
+    await _cacheRepository.putManualName(
+      barcode: cleanBarcode,
+      productName: cleanName,
+    );
+    await _cacheRepository.putFound(
+      barcode: cleanBarcode,
+      productName: cleanName,
+      provider: null,
+    );
   }
 }

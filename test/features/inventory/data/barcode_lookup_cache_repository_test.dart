@@ -56,10 +56,22 @@ void main() {
 
     test('clear removes cached entries', () async {
       await repository.putNotFound(barcode: '333');
+      await repository.putManualName(barcode: '333', productName: 'Manual');
       expect(repository.get('333'), isNotNull);
+      expect(repository.getManualName('333'), 'Manual');
 
       await repository.clear();
       expect(repository.get('333'), isNull);
+      expect(repository.getManualName('333'), isNull);
+    });
+
+    test('stores and reads manual name entry', () async {
+      await repository.putManualName(
+        barcode: '599001',
+        productName: 'Custom Yogurt',
+      );
+
+      expect(repository.getManualName('599001'), 'Custom Yogurt');
     });
   });
 }

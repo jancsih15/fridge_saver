@@ -36,6 +36,7 @@ class _RapidDraft {
 }
 
 enum _RapidItemAction {
+  editName,
   quantityMinus1,
   quantityPlus1,
   quantitySet1,
@@ -173,6 +174,10 @@ class _RapidCaptureScreenState extends State<RapidCaptureScreen> {
         draft.barcode,
         draft.quantity < 1 ? 1 : draft.quantity,
       );
+      await _lookupService.rememberNameForBarcode(
+        barcode: draft.barcode,
+        productName: draft.name,
+      );
       await _prefsRepository.saveLastLocation(draft.location);
       _defaultLocation = draft.location;
     }
@@ -291,6 +296,45 @@ class _RapidCaptureScreenState extends State<RapidCaptureScreen> {
     );
   }
 
+  Future<void> _editNameForIndex(int index) async {
+    if (index < 0 || index >= _queue.length) {
+      return;
+    }
+    final draft = _queue[index];
+    final controller = TextEditingController(text: draft.name);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Edit item name'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(labelText: 'Name'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () =>
+                  Navigator.of(context).pop(controller.text.trim()),
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+    controller.dispose();
+    if (result == null || result.isEmpty || !mounted) {
+      return;
+    }
+    setState(() {
+      _queue[index].name = result;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -403,6 +447,11 @@ class _RapidCaptureScreenState extends State<RapidCaptureScreen> {
                                           _applyItemAction(index, action),
                                       itemBuilder: (context) => const [
                                         PopupMenuItem(
+                                          value: _RapidItemAction.editName,
+                                          child: Text('Edit name'),
+                                        ),
+                                        PopupMenuDivider(),
+                                        PopupMenuItem(
                                           value: _RapidItemAction.quantityPlus1,
                                           child: Text('Qty +1'),
                                         ),
@@ -455,12 +504,18 @@ class _RapidCaptureScreenState extends State<RapidCaptureScreen> {
                           ),
                   ),
                   const SizedBox(height: 10),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      onPressed: _queue.isEmpty || _isSaving ? null : _saveAll,
-                      icon: const Icon(Icons.save),
-                      label: const Text('Save all queued items'),
+                  SafeArea(
+                    top: false,
+                    minimum: const EdgeInsets.only(bottom: 8),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: _queue.isEmpty || _isSaving
+                            ? null
+                            : _saveAll,
+                        icon: const Icon(Icons.save),
+                        label: const Text('Save all queued items'),
+                      ),
                     ),
                   ),
                 ],
@@ -474,6 +529,10 @@ class _RapidCaptureScreenState extends State<RapidCaptureScreen> {
 
   void _applyItemAction(int index, _RapidItemAction action) {
     if (index < 0 || index >= _queue.length) {
+      return;
+    }
+    if (action == _RapidItemAction.editName) {
+      _editNameForIndex(index);
       return;
     }
     setState(() {
